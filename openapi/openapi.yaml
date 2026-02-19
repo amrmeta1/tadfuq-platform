@@ -1,8 +1,11 @@
 openapi: "3.1.0"
 info:
   title: CashFlow.ai Tenant & Identity API
-  description: Multi-tenant SaaS foundation for CashFlow.ai — agentic financial management for GCC SMEs.
-  version: "1.0.0"
+  description: |
+    Multi-tenant SaaS foundation for CashFlow.ai — agentic financial management for GCC SMEs.
+    Authentication is handled by Keycloak (OIDC). Clients obtain JWT access tokens from the
+    Keycloak token endpoint and present them as Bearer tokens to this API.
+  version: "2.0.0"
   contact:
     name: Finch Engineering
     email: eng@finch.co
@@ -12,20 +15,16 @@ servers:
     description: Local development
 
 tags:
-  - name: Auth
-    description: Authentication endpoints
+  - name: Health
+    description: Health check
+  - name: Profile
+    description: Current user profile
   - name: Tenants
     description: Tenant (organization) management
-  - name: Users
-    description: User management within a tenant
-  - name: Roles
-    description: Role and permission management
-  - name: Memberships
+  - name: Members
     description: Tenant membership management
   - name: Audit
     description: Audit log access
-  - name: Health
-    description: Health check
 
 paths:
   /healthz:
@@ -45,85 +44,13 @@ paths:
                     type: string
                     example: ok
 
-  /api/v1/auth/register:
-    post:
-      tags: [Auth]
-      summary: Register a new user (local auth)
-      operationId: register
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, password, full_name]
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: user@example.com
-                password:
-                  type: string
-                  minLength: 8
-                  example: secureP@ss1
-                full_name:
-                  type: string
-                  example: Ahmed Al-Rashid
-                tenant_id:
-                  type: string
-                  format: uuid
-                  description: Optional tenant to join on registration
-      responses:
-        "201":
-          description: User created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_User"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-
-  /api/v1/auth/login:
-    post:
-      tags: [Auth]
-      summary: Login with email/password
-      operationId: login
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [email, password]
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: user@example.com
-                password:
-                  type: string
-                  example: secureP@ss1
-                tenant_id:
-                  type: string
-                  format: uuid
-                  description: Specify tenant context (uses first membership if omitted)
-      responses:
-        "200":
-          description: Authentication successful
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_TokenPair"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
-  /api/v1/me:
+  /me:
     get:
-      tags: [Users]
-      summary: Get current user profile
+      tags: [Profile]
+      summary: Get current user profile (auto-provisioned from Keycloak JWT)
       operationId: getProfile
       security:
-        - BearerAuth: []
+        - KeycloakBearer: []
       responses:
         "200":
           description: Current user
@@ -134,13 +61,13 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
-  /api/v1/tenants:
+  /tenants:
     post:
       tags: [Tenants]
-      summary: Create a new tenant
+      summary: Create a new tenant (requires tenant:create permission)
       operationId: createTenant
       security:
-        - BearerAuth: []
+        - KeycloakBearer: []
       requestBody:
         required: true
         content:
@@ -149,44 +76,25 @@ paths:
               $ref: "#/components/schemas/CreateTenantInput"
       responses:
         "201":
-          description: Tenant created
+          description: Tenant created — caller is auto-added as tenant_admin
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIResponse_Tenant"
         "400":
           $ref: "#/components/responses/BadRequest"
-    get:
-      tags: [Tenants]
-      summary: List tenants
-      operationId: listTenants
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/Limit"
-        - $ref: "#/components/parameters/Offset"
-      responses:
-        "200":
-          description: Tenant list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_TenantList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
-  /api/v1/tenants/{tenantID}:
+  /tenants/{tenantID}:
     parameters:
-      - name: tenantID
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/TenantID"
     get:
       tags: [Tenants]
       summary: Get tenant by ID
       operationId: getTenant
       security:
-        - BearerAuth: []
+        - KeycloakBearer: []
       responses:
         "200":
           description: Tenant details
@@ -196,230 +104,38 @@ paths:
                 $ref: "#/components/schemas/APIResponse_Tenant"
         "404":
           $ref: "#/components/responses/NotFound"
-    put:
-      tags: [Tenants]
-      summary: Update tenant
-      operationId: updateTenant
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateTenantInput"
-      responses:
-        "200":
-          description: Tenant updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_Tenant"
-    delete:
-      tags: [Tenants]
-      summary: Soft-delete tenant
-      operationId: deleteTenant
-      security:
-        - BearerAuth: []
-      responses:
-        "204":
-          description: Tenant deleted
 
-  /api/v1/users:
+  /tenants/{tenantID}/members:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
     get:
-      tags: [Users]
-      summary: List users in current tenant
-      operationId: listUsers
+      tags: [Members]
+      summary: List members of a tenant
+      operationId: listMembers
       security:
-        - BearerAuth: []
+        - KeycloakBearer: []
       parameters:
-        - $ref: "#/components/parameters/XTenantID"
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Offset"
       responses:
         "200":
-          description: User list
+          description: Member list
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/APIResponse_UserList"
-
-  /api/v1/users/{userID}:
-    parameters:
-      - name: userID
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      tags: [Users]
-      summary: Get user by ID
-      operationId: getUser
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: User details
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_User"
-    put:
-      tags: [Users]
-      summary: Update user
-      operationId: updateUser
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateUserInput"
-      responses:
-        "200":
-          description: User updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_User"
-    delete:
-      tags: [Users]
-      summary: Soft-delete user
-      operationId: deleteUser
-      security:
-        - BearerAuth: []
-      responses:
-        "204":
-          description: User deleted
-
-  /api/v1/roles:
+                $ref: "#/components/schemas/APIResponse_MembershipList"
     post:
-      tags: [Roles]
-      summary: Create role in current tenant
-      operationId: createRole
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/XTenantID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateRoleInput"
-      responses:
-        "201":
-          description: Role created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_Role"
-    get:
-      tags: [Roles]
-      summary: List roles in current tenant
-      operationId: listRoles
-      security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/XTenantID"
-      responses:
-        "200":
-          description: Role list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_RoleList"
-
-  /api/v1/roles/{roleID}:
-    parameters:
-      - name: roleID
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      tags: [Roles]
-      summary: Get role by ID
-      operationId: getRole
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Role details
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_Role"
-    put:
-      tags: [Roles]
-      summary: Update role
-      operationId: updateRole
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateRoleInput"
-      responses:
-        "200":
-          description: Role updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_Role"
-    delete:
-      tags: [Roles]
-      summary: Delete role
-      operationId: deleteRole
-      security:
-        - BearerAuth: []
-      responses:
-        "204":
-          description: Role deleted
-
-  /api/v1/permissions:
-    get:
-      tags: [Roles]
-      summary: List all available permissions
-      operationId: listPermissions
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Permission list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/APIResponse_PermissionList"
-
-  /api/v1/memberships:
-    post:
-      tags: [Memberships]
-      summary: Add a user to current tenant
+      tags: [Members]
+      summary: Add a member to the tenant (requires member:add permission)
       operationId: addMember
       security:
-        - BearerAuth: []
-      parameters:
-        - $ref: "#/components/parameters/XTenantID"
+        - KeycloakBearer: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [user_id, role_id]
-              properties:
-                user_id:
-                  type: string
-                  format: uuid
-                role_id:
-                  type: string
-                  format: uuid
+              $ref: "#/components/schemas/AddMemberInput"
       responses:
         "201":
           description: Membership created
@@ -427,65 +143,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIResponse_Membership"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
-  /api/v1/memberships/{membershipID}/role:
-    put:
-      tags: [Memberships]
-      summary: Change a member's role
+  /tenants/{tenantID}/members/{membershipID}:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+      - $ref: "#/components/parameters/MembershipID"
+    delete:
+      tags: [Members]
+      summary: Remove a member from the tenant
+      operationId: removeMember
+      security:
+        - KeycloakBearer: []
+      responses:
+        "204":
+          description: Membership removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tenants/{tenantID}/roles:
+    parameters:
+      - $ref: "#/components/parameters/TenantID"
+    post:
+      tags: [Members]
+      summary: Change a member's Keycloak client role
       operationId: changeMemberRole
       security:
-        - BearerAuth: []
-      parameters:
-        - name: membershipID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+        - KeycloakBearer: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [role_id]
-              properties:
-                role_id:
-                  type: string
-                  format: uuid
+              $ref: "#/components/schemas/ChangeMemberRoleInput"
       responses:
         "200":
-          description: Membership updated
+          description: Role updated
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIResponse_Membership"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
-  /api/v1/memberships/{membershipID}:
-    delete:
-      tags: [Memberships]
-      summary: Remove a member from tenant
-      operationId: removeMember
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: membershipID
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        "204":
-          description: Membership removed
-
-  /api/v1/audit-logs:
+  /audit-logs:
     get:
       tags: [Audit]
-      summary: List audit logs for current tenant
+      summary: List audit logs for current tenant (requires audit:read permission)
       operationId: listAuditLogs
       security:
-        - BearerAuth: []
+        - KeycloakBearer: []
       parameters:
         - $ref: "#/components/parameters/XTenantID"
         - $ref: "#/components/parameters/Limit"
@@ -497,15 +209,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIResponse_AuditLogList"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
 components:
   securitySchemes:
-    BearerAuth:
+    KeycloakBearer:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: |
+        Keycloak-issued RS256 JWT. Obtain via:
+        POST http://localhost:8180/realms/cashflow/protocol/openid-connect/token
+        with grant_type=password, client_id=cashflow-api, client_secret=cashflow-api-secret
 
   parameters:
+    TenantID:
+      name: tenantID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MembershipID:
+      name: membershipID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     XTenantID:
       name: X-Tenant-ID
       in: header
@@ -536,7 +268,13 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
-      description: Unauthorized
+      description: Unauthorized — missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Forbidden — insufficient Keycloak role/permissions
       content:
         application/json:
           schema:
@@ -618,11 +356,12 @@ components:
         id:
           type: string
           format: uuid
+        sub:
+          type: string
+          description: Keycloak subject identifier
         email:
           type: string
           format: email
-        email_verified:
-          type: boolean
         full_name:
           type: string
         avatar_url:
@@ -641,90 +380,6 @@ components:
           type: string
           format: date-time
 
-    UpdateUserInput:
-      type: object
-      properties:
-        full_name:
-          type: string
-        avatar_url:
-          type: string
-        status:
-          type: string
-          enum: [active, disabled]
-
-    Role:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        tenant_id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          example: admin
-        description:
-          type: string
-        is_system:
-          type: boolean
-        permissions:
-          type: array
-          items:
-            $ref: "#/components/schemas/Permission"
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
-    CreateRoleInput:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
-          example: accountant
-        description:
-          type: string
-        permission_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-
-    UpdateRoleInput:
-      type: object
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        permission_ids:
-          type: array
-          items:
-            type: string
-            format: uuid
-
-    Permission:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        resource:
-          type: string
-          example: tenant
-        action:
-          type: string
-          example: read
-        description:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-
     Membership:
       type: object
       properties:
@@ -737,9 +392,10 @@ components:
         user_id:
           type: string
           format: uuid
-        role_id:
+        role:
           type: string
-          format: uuid
+          description: Keycloak client role name
+          enum: [tenant_admin, owner, finance_manager, accountant_readonly]
         status:
           type: string
           enum: [active, invited, disabled]
@@ -749,6 +405,28 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    AddMemberInput:
+      type: object
+      required: [user_id, role]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [tenant_admin, owner, finance_manager, accountant_readonly]
+
+    ChangeMemberRoleInput:
+      type: object
+      required: [membership_id, role]
+      properties:
+        membership_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [tenant_admin, owner, finance_manager, accountant_readonly]
 
     AuditLog:
       type: object
@@ -760,13 +438,12 @@ components:
           type: string
           format: uuid
           nullable: true
-        actor_id:
+        actor_sub:
           type: string
-          format: uuid
-          nullable: true
+          description: Keycloak subject of the actor
         action:
           type: string
-          example: user.login
+          example: tenant.created
         entity_type:
           type: string
         entity_id:
@@ -780,20 +457,6 @@ components:
         occurred_at:
           type: string
           format: date-time
-
-    TokenPair:
-      type: object
-      properties:
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        expires_in:
-          type: integer
-          example: 900
-        token_type:
-          type: string
-          example: Bearer
 
     Meta:
       type: object
@@ -825,39 +488,20 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/User"
-    APIResponse_UserList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/User"
-        meta:
-          $ref: "#/components/schemas/Meta"
-    APIResponse_Role:
-      type: object
-      properties:
-        data:
-          $ref: "#/components/schemas/Role"
-    APIResponse_RoleList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Role"
-    APIResponse_PermissionList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/Permission"
     APIResponse_Membership:
       type: object
       properties:
         data:
           $ref: "#/components/schemas/Membership"
+    APIResponse_MembershipList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Membership"
+        meta:
+          $ref: "#/components/schemas/Meta"
     APIResponse_AuditLogList:
       type: object
       properties:
@@ -867,8 +511,3 @@ components:
             $ref: "#/components/schemas/AuditLog"
         meta:
           $ref: "#/components/schemas/Meta"
-    APIResponse_TokenPair:
-      type: object
-      properties:
-        data:
-          $ref: "#/components/schemas/TokenPair"

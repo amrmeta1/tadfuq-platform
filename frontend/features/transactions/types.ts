@@ -1,0 +1,62 @@
+export type TransactionType = "inflow" | "outflow" | "transfer";
+
+export type TransactionStatus = "cleared" | "pending" | "reconciled";
+
+export const CATEGORIES = [
+  "Revenue",
+  "Payroll",
+  "Rent",
+  "Utilities",
+  "Supplies",
+  "Marketing",
+  "Travel",
+  "Software",
+  "Tax",
+  "Insurance",
+  "Loan Repayment",
+  "Dividends",
+  "Other",
+] as const;
+
+export type Category = (typeof CATEGORIES)[number];
+
+export interface Transaction {
+  id: string;
+  tenant_id: string;
+  txn_date: string;
+  amount: number;
+  currency: string;
+  type: TransactionType;
+  status: TransactionStatus;
+  description: string;
+  counterparty: string;
+  category: Category;
+  account_id: string;
+  account_name: string;
+  reference?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransactionFilters {
+  search?: string;
+  category?: Category | "";
+  type?: TransactionType | "";
+  status?: TransactionStatus | "";
+  from?: string;
+  to?: string;
+  account_id?: string;
+}
+
+export interface UpdateTransactionPayload {
+  category?: Category;
+  description?: string;
+  notes?: string;
+  status?: TransactionStatus;
+}
+
+export interface BulkRecategorizePayload {
+  ids: string[];
+  category: Category;
+}

@@ -12,13 +12,11 @@ import (
 func TestContextTenantID(t *testing.T) {
 	ctx := context.Background()
 
-	// Should return false when not set
 	_, ok := domain.TenantIDFromContext(ctx)
 	if ok {
 		t.Fatal("expected tenant_id to not be in context")
 	}
 
-	// Should return the value when set
 	id := uuid.New()
 	ctx = domain.ContextWithTenantID(ctx, id)
 	got, ok := domain.TenantIDFromContext(ctx)
@@ -49,59 +47,78 @@ func TestContextUserID(t *testing.T) {
 	}
 }
 
-func TestHasPermission(t *testing.T) {
+func TestContextUserSub(t *testing.T) {
 	ctx := context.Background()
 
-	// No permissions
-	if domain.HasPermission(ctx, "tenant", "read") {
-		t.Fatal("expected no permission")
+	_, ok := domain.UserSubFromContext(ctx)
+	if ok {
+		t.Fatal("expected user_sub to not be in context")
 	}
 
-	// With permissions
-	perms := []domain.Permission{
-		{Resource: "tenant", Action: "read"},
-		{Resource: "tenant", Action: "update"},
-		{Resource: "user", Action: "read"},
+	sub := "keycloak-sub-12345"
+	ctx = domain.ContextWithUserSub(ctx, sub)
+	got, ok := domain.UserSubFromContext(ctx)
+	if !ok {
+		t.Fatal("expected user_sub to be in context")
 	}
-	ctx = domain.ContextWithPermissions(ctx, perms)
-
-	tests := []struct {
-		resource string
-		action   string
-		expected bool
-	}{
-		{"tenant", "read", true},
-		{"tenant", "update", true},
-		{"tenant", "delete", false},
-		{"user", "read", true},
-		{"user", "delete", false},
-		{"role", "read", false},
-	}
-
-	for _, tc := range tests {
-		got := domain.HasPermission(ctx, tc.resource, tc.action)
-		if got != tc.expected {
-			t.Errorf("HasPermission(%s, %s) = %v, want %v", tc.resource, tc.action, got, tc.expected)
-		}
+	if got != sub {
+		t.Fatalf("expected %s, got %s", sub, got)
 	}
 }
 
-func TestHasPermissionManageWildcard(t *testing.T) {
+func TestContextClientRoles(t *testing.T) {
 	ctx := context.Background()
-	perms := []domain.Permission{
-		{Resource: "membership", Action: "manage"},
-	}
-	ctx = domain.ContextWithPermissions(ctx, perms)
 
-	// "manage" should grant any action on the resource
-	if !domain.HasPermission(ctx, "membership", "create") {
-		t.Fatal("expected manage to grant create")
+	roles := domain.ClientRolesFromContext(ctx)
+	if len(roles) != 0 {
+		t.Fatal("expected empty roles from empty context")
 	}
-	if !domain.HasPermission(ctx, "membership", "delete") {
-		t.Fatal("expected manage to grant delete")
+
+	ctx = domain.ContextWithClientRoles(ctx, []string{"tenant_admin", "owner"})
+	roles = domain.ClientRolesFromContext(ctx)
+	if len(roles) != 2 {
+		t.Fatalf("expected 2 roles, got %d", len(roles))
 	}
-	// But not on a different resource
-	if domain.HasPermission(ctx, "tenant", "create") {
-		t.Fatal("expected no permission on different resource")
+	if roles[0] != "tenant_admin" || roles[1] != "owner" {
+		t.Fatalf("unexpected roles: %v", roles)
+	}
+}
+
+func TestContextUserEmail(t *testing.T) {
+	ctx := context.Background()
+
+	_, ok := domain.UserEmailFromContext(ctx)
+	if ok {
+		t.Fatal("expected email to not be in context")
+	}
+
+	email := "admin@demo.com"
+	ctx = domain.ContextWithUserEmail(ctx, email)
+	got, ok := domain.UserEmailFromContext(ctx)
+	if !ok {
+		t.Fatal("expected email to be in context")
+	}
+	if got != email {
+		t.Fatalf("expected %s, got %s", email, got)
+	}
+}
+
+func TestIsValidRole(t *testing.T) {
+	tests := []struct {
+		role  string
+		valid bool
+	}{
+		{"tenant_admin", true},
+		{"owner", true},
+		{"finance_manager", true},
+		{"accountant_readonly", true},
+		{"super_admin", false},
+		{"", false},
+	}
+	for _, tc := range tests {
+		got := domain.IsValidRole(tc.role)
+		if got != tc.valid {
+			t.Errorf("IsValidRole(%q) = %v, want %v", tc.role, got, tc.valid)
+		}
 	}
 }

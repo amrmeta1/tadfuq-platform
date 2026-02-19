@@ -9,10 +9,11 @@ import (
 type contextKey string
 
 const (
-	ctxKeyTenantID contextKey = "tenant_id"
-	ctxKeyUserID   contextKey = "user_id"
-	ctxKeyUserEmail contextKey = "user_email"
-	ctxKeyPermissions contextKey = "permissions"
+	ctxKeyTenantID    contextKey = "tenant_id"
+	ctxKeyUserID      contextKey = "user_id"
+	ctxKeyUserSub     contextKey = "user_sub"
+	ctxKeyUserEmail   contextKey = "user_email"
+	ctxKeyClientRoles contextKey = "client_roles"
 )
 
 // TenantID helpers
@@ -34,7 +35,7 @@ func MustTenantIDFromContext(ctx context.Context) uuid.UUID {
 	return id
 }
 
-// UserID helpers
+// UserID helpers (internal DB UUID)
 
 func ContextWithUserID(ctx context.Context, id uuid.UUID) context.Context {
 	return context.WithValue(ctx, ctxKeyUserID, id)
@@ -43,6 +44,17 @@ func ContextWithUserID(ctx context.Context, id uuid.UUID) context.Context {
 func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
 	id, ok := ctx.Value(ctxKeyUserID).(uuid.UUID)
 	return id, ok
+}
+
+// UserSub helpers (Keycloak subject)
+
+func ContextWithUserSub(ctx context.Context, sub string) context.Context {
+	return context.WithValue(ctx, ctxKeyUserSub, sub)
+}
+
+func UserSubFromContext(ctx context.Context) (string, bool) {
+	sub, ok := ctx.Value(ctxKeyUserSub).(string)
+	return sub, ok
 }
 
 // UserEmail helpers
@@ -56,22 +68,13 @@ func UserEmailFromContext(ctx context.Context) (string, bool) {
 	return email, ok
 }
 
-// Permissions helpers
+// Client roles helpers (Keycloak roles)
 
-func ContextWithPermissions(ctx context.Context, perms []Permission) context.Context {
-	return context.WithValue(ctx, ctxKeyPermissions, perms)
+func ContextWithClientRoles(ctx context.Context, roles []string) context.Context {
+	return context.WithValue(ctx, ctxKeyClientRoles, roles)
 }
 
-func PermissionsFromContext(ctx context.Context) []Permission {
-	perms, _ := ctx.Value(ctxKeyPermissions).([]Permission)
-	return perms
-}
-
-func HasPermission(ctx context.Context, resource, action string) bool {
-	for _, p := range PermissionsFromContext(ctx) {
-		if p.Resource == resource && (p.Action == action || p.Action == "manage") {
-			return true
-		}
-	}
-	return false
+func ClientRolesFromContext(ctx context.Context) []string {
+	roles, _ := ctx.Value(ctxKeyClientRoles).([]string)
+	return roles
 }

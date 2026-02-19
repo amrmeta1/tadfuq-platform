@@ -6,16 +6,18 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/finch-co/cashflow/internal/auth"
+	"github.com/finch-co/cashflow/internal/domain"
 	"github.com/finch-co/cashflow/internal/middleware"
 )
 
 type RouterDeps struct {
-	JWTSecret   string
-	Tenants     *TenantHandler
-	Auth        *AuthHandler
-	Users       *UserHandler
-	Roles       *RoleHandler
-	Audit       *AuditHandler
+	Validator *auth.Validator
+	Users     domain.UserRepository
+	AuditRepo domain.AuditLogRepository
+	Tenants   *TenantHandler
+	Members   *MemberHandler
+	Audit     *AuditHandler
 }
 
 func NewRouter(deps RouterDeps) http.Handler {
@@ -26,7 +28,6 @@ func NewRouter(deps RouterDeps) http.Handler {
 	r.Use(chimw.RealIP)
 	r.Use(middleware.RequestLogging)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.AllowContentType("application/json"))
 	r.Use(corsMiddleware)
 
 	// Health check (unauthenticated)
@@ -36,74 +37,36 @@ func NewRouter(deps RouterDeps) http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Auth endpoints (unauthenticated)
-	r.Route("/api/v1/auth", func(r chi.Router) {
-		r.Post("/login", deps.Auth.Login)
-		r.Post("/register", deps.Auth.Register)
-	})
-
-	// Authenticated routes
+	// Authenticated routes (Keycloak JWT)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.JWTAuth(deps.JWTSecret))
+		r.Use(middleware.KeycloakAuth(deps.Validator, deps.AuditRepo))
 		r.Use(middleware.TenantFromHeader)
+		r.Use(middleware.ProvisionUser(deps.Users))
 
 		// Current user profile
-		r.Get("/api/v1/me", deps.Users.GetProfile)
+		r.Get("/me", deps.Members.GetProfile)
 
-		// Tenant management (requires tenant.* permissions)
-		r.Route("/api/v1/tenants", func(r chi.Router) {
-			r.With(middleware.RequirePermission("tenant", "create")).Post("/", deps.Tenants.Create)
-			r.With(middleware.RequirePermission("tenant", "read")).Get("/", deps.Tenants.List)
+		// Tenant CRUD
+		r.Route("/tenants", func(r chi.Router) {
+			r.With(middleware.RequirePermission(auth.PermTenantCreate)).Post("/", deps.Tenants.Create)
 
 			r.Route("/{tenantID}", func(r chi.Router) {
-				r.With(middleware.RequirePermission("tenant", "read")).Get("/", deps.Tenants.GetByID)
-				r.With(middleware.RequirePermission("tenant", "update")).Put("/", deps.Tenants.Update)
-				r.With(middleware.RequirePermission("tenant", "delete")).Delete("/", deps.Tenants.Delete)
+				r.Get("/", deps.Tenants.GetByID)
+
+				// Members sub-resource
+				r.Post("/members", deps.Members.AddMember)
+				r.Get("/members", deps.Members.ListMembers)
+				r.Delete("/members/{membershipID}", deps.Members.RemoveMember)
+
+				// Role change
+				r.Post("/roles", deps.Members.ChangeMemberRole)
 			})
 		})
 
-		// User management (within tenant context)
-		r.Route("/api/v1/users", func(r chi.Router) {
+		// Audit logs (requires tenant context)
+		r.Route("/audit-logs", func(r chi.Router) {
 			r.Use(middleware.RequireTenant)
-			r.With(middleware.RequirePermission("user", "read")).Get("/", deps.Users.ListByTenant)
-
-			r.Route("/{userID}", func(r chi.Router) {
-				r.With(middleware.RequirePermission("user", "read")).Get("/", deps.Users.GetByID)
-				r.With(middleware.RequirePermission("user", "update")).Put("/", deps.Users.Update)
-				r.With(middleware.RequirePermission("user", "delete")).Delete("/", deps.Users.Delete)
-			})
-		})
-
-		// Membership management
-		r.Route("/api/v1/memberships", func(r chi.Router) {
-			r.Use(middleware.RequireTenant)
-			r.With(middleware.RequirePermission("membership", "manage")).Post("/", deps.Users.AddMember)
-
-			r.Route("/{membershipID}", func(r chi.Router) {
-				r.With(middleware.RequirePermission("membership", "manage")).Put("/role", deps.Users.ChangeMemberRole)
-				r.With(middleware.RequirePermission("membership", "manage")).Delete("/", deps.Users.RemoveMember)
-			})
-		})
-
-		// Role & permission management
-		r.Route("/api/v1/roles", func(r chi.Router) {
-			r.Use(middleware.RequireTenant)
-			r.With(middleware.RequirePermission("role", "create")).Post("/", deps.Roles.Create)
-			r.With(middleware.RequirePermission("role", "read")).Get("/", deps.Roles.ListByTenant)
-
-			r.Route("/{roleID}", func(r chi.Router) {
-				r.With(middleware.RequirePermission("role", "read")).Get("/", deps.Roles.GetByID)
-				r.With(middleware.RequirePermission("role", "update")).Put("/", deps.Roles.Update)
-				r.With(middleware.RequirePermission("role", "delete")).Delete("/", deps.Roles.Delete)
-			})
-		})
-
-		r.With(middleware.RequirePermission("role", "read")).Get("/api/v1/permissions", deps.Roles.ListPermissions)
-
-		// Audit logs
-		r.Route("/api/v1/audit-logs", func(r chi.Router) {
-			r.Use(middleware.RequireTenant)
-			r.With(middleware.RequirePermission("audit_log", "read")).Get("/", deps.Audit.ListByTenant)
+			r.With(middleware.RequirePermission(auth.PermAuditRead)).Get("/", deps.Audit.ListByTenant)
 		})
 	})
 

@@ -1,0 +1,383 @@
+openapi: 3.0.3
+info:
+  title: CashFlow.ai – Ingestion Service API
+  description: |
+    Financial data ingestion service for CashFlow.ai multi-tenant SaaS.
+    Handles bank transaction imports (CSV), bank account registration,
+    and sync commands for bank/accounting integrations via RabbitMQ.
+  version: 1.0.0
+  contact:
+    name: Finch Engineering
+    email: eng@finch.co
+
+servers:
+  - url: http://localhost:8081
+    description: Local development
+
+security:
+  - KeycloakBearer: []
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      summary: Health check
+      security: []
+      tags: [System]
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: ingestion-service
+
+  /tenants/{tenantId}/imports/bank-csv:
+    post:
+      operationId: importBankCSV
+      summary: Import bank transactions from CSV
+      tags: [Ingestion]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, account_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with columns (date, amount, currency, description, counterparty, category)
+                account_id:
+                  type: string
+                  format: uuid
+                  description: Target bank account ID
+      responses:
+        "200":
+          description: Import completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CSVImportResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tenants/{tenantId}/transactions:
+    get:
+      operationId: listTransactions
+      summary: List bank transactions
+      tags: [Transactions]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD)
+        - name: accountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by bank account
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BankTransaction"
+                  meta:
+                    $ref: "#/components/schemas/Meta"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tenants/{tenantId}/bank-accounts:
+    post:
+      operationId: createBankAccount
+      summary: Register a bank account
+      tags: [BankAccounts]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBankAccountInput"
+      responses:
+        "201":
+          description: Bank account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tenants/{tenantId}/sync/bank:
+    post:
+      operationId: syncBank
+      summary: Enqueue bank sync command
+      tags: [Sync]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "202":
+          description: Sync job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /tenants/{tenantId}/sync/accounting:
+    post:
+      operationId: syncAccounting
+      summary: Enqueue accounting sync command
+      tags: [Sync]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "202":
+          description: Sync job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    KeycloakBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Keycloak-issued JWT (RS256)
+
+  parameters:
+    TenantId:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+
+    Meta:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    CSVImportResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            job_id:
+              type: string
+              format: uuid
+            total_rows:
+              type: integer
+            inserted:
+              type: integer
+            duplicates:
+              type: integer
+            errors:
+              type: integer
+            error_detail:
+              type: array
+              items:
+                type: string
+
+    BankTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        txn_date:
+          type: string
+          format: date
+        amount:
+          type: number
+        currency:
+          type: string
+        description:
+          type: string
+        counterparty:
+          type: string
+        category:
+          type: string
+        hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    BankAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+        external_id:
+          type: string
+        currency:
+          type: string
+        nickname:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive, error]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateBankAccountInput:
+      type: object
+      required: [nickname]
+      properties:
+        provider:
+          type: string
+          default: manual
+        external_id:
+          type: string
+        currency:
+          type: string
+          default: SAR
+        nickname:
+          type: string
+
+    IngestionJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        job_type:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        scheduled_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    MessageEnvelope:
+      description: Standard RabbitMQ message envelope schema
+      type: object
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        tenant_id:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+        idempotency_key:
+          type: string
+        trace_id:
+          type: string
+        payload:
+          type: object

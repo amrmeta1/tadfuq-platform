@@ -10,6 +10,7 @@ type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
 	Auth     AuthConfig
+	NATS     NATSConfig
 	OTEL     OTELConfig
 }
 
@@ -39,17 +40,25 @@ func (d DatabaseConfig) DSN() string {
 }
 
 type AuthConfig struct {
-	// OIDC / Keycloak settings
+	// Keycloak OIDC
 	IssuerURL string `envconfig:"AUTH_ISSUER_URL" default:"http://localhost:8180/realms/cashflow"`
+	JWKSURL   string `envconfig:"AUTH_JWKS_URL" default:"http://localhost:8180/realms/cashflow/protocol/openid-connect/certs"`
 	Audience  string `envconfig:"AUTH_AUDIENCE" default:"cashflow-api"`
 
-	// Local auth (dev fallback)
-	JWTSecret       string `envconfig:"AUTH_JWT_SECRET" default:"dev-secret-change-me-in-production"`
-	LocalAuthEnabled bool  `envconfig:"AUTH_LOCAL_ENABLED" default:"true"`
+	// JWKS cache TTL in seconds
+	JWKSCacheTTL int `envconfig:"AUTH_JWKS_CACHE_TTL" default:"300"` // 5 min
 
-	// Token durations
-	AccessTokenTTL  int `envconfig:"AUTH_ACCESS_TOKEN_TTL" default:"900"`    // 15 min
-	RefreshTokenTTL int `envconfig:"AUTH_REFRESH_TOKEN_TTL" default:"604800"` // 7 days
+	// Dev-only: skip JWKS validation (NEVER in production)
+	DevMode bool `envconfig:"AUTH_DEV_MODE" default:"false"`
+}
+
+type NATSConfig struct {
+	URL            string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
+	MaxReconnects  int    `envconfig:"NATS_MAX_RECONNECTS" default:"10"`
+	ReconnectWait  int    `envconfig:"NATS_RECONNECT_WAIT" default:"2"`   // seconds
+	MaxAckPending  int    `envconfig:"NATS_MAX_ACK_PENDING" default:"256"`
+	MaxDeliver     int    `envconfig:"NATS_MAX_DELIVER" default:"5"`      // retries before DLQ
+	AckWait        int    `envconfig:"NATS_ACK_WAIT" default:"30"`        // seconds
 }
 
 type OTELConfig struct {
@@ -60,8 +69,12 @@ type OTELConfig struct {
 
 func Load() (*Config, error) {
 	var cfg Config
-	if err := envconfig.Process("", &cfg); err != nil {
+	if err := loadEnvConfig(&cfg); err != nil {
 		return nil, fmt.Errorf("loading config: %w", err)
 	}
 	return &cfg, nil
+}
+
+func loadEnvConfig(target any) error {
+	return envconfig.Process("", target)
 }

@@ -26,9 +26,9 @@ func (r *AuditLogRepo) Create(ctx context.Context, input domain.CreateAuditLogIn
 	}
 
 	_, err = r.pool.Exec(ctx,
-		`INSERT INTO audit_logs (tenant_id, actor_id, action, entity_type, entity_id, metadata, ip_address, user_agent)
+		`INSERT INTO audit_logs (tenant_id, actor_sub, action, entity_type, entity_id, metadata, ip_address, user_agent)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		input.TenantID, input.ActorID, input.Action, input.EntityType, input.EntityID, meta, input.IPAddress, input.UserAgent,
+		input.TenantID, input.ActorSub, input.Action, input.EntityType, input.EntityID, meta, input.IPAddress, input.UserAgent,
 	)
 	if err != nil {
 		return fmt.Errorf("creating audit log: %w", err)
@@ -46,7 +46,7 @@ func (r *AuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, lim
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, tenant_id, actor_id, action, entity_type, entity_id, metadata, ip_address, user_agent, occurred_at
+		`SELECT id, tenant_id, actor_sub, action, entity_type, entity_id, metadata, ip_address, user_agent, occurred_at
 		 FROM audit_logs WHERE tenant_id = $1
 		 ORDER BY occurred_at DESC LIMIT $2 OFFSET $3`, tenantID, limit, offset,
 	)
@@ -59,7 +59,7 @@ func (r *AuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, lim
 	for rows.Next() {
 		var l domain.AuditLog
 		var metaBytes []byte
-		if err := rows.Scan(&l.ID, &l.TenantID, &l.ActorID, &l.Action, &l.EntityType, &l.EntityID, &metaBytes, &l.IPAddress, &l.UserAgent, &l.OccurredAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.TenantID, &l.ActorSub, &l.Action, &l.EntityType, &l.EntityID, &metaBytes, &l.IPAddress, &l.UserAgent, &l.OccurredAt); err != nil {
 			return nil, 0, fmt.Errorf("scanning audit log: %w", err)
 		}
 		_ = json.Unmarshal(metaBytes, &l.Metadata)

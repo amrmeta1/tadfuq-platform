@@ -4,16 +4,16 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"github.com/finch-co/cashflow/internal/auth"
 	"github.com/finch-co/cashflow/internal/domain"
 )
 
-// JWTAuth validates Bearer tokens and populates context with user/tenant/permissions.
-// Supports both local JWT (HS256) and external OIDC tokens.
-func JWTAuth(jwtSecret string) func(http.Handler) http.Handler {
+// KeycloakAuth validates Keycloak-issued JWTs (RS256 via JWKS) and populates
+// context with user subject, email, tenant_id, and client roles.
+func KeycloakAuth(validator *auth.Validator, audit domain.AuditLogRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -27,83 +27,62 @@ func JWTAuth(jwtSecret string) func(http.Handler) http.Handler {
 				writeError(w, http.StatusUnauthorized, "invalid authorization header format")
 				return
 			}
-			tokenStr := parts[1]
 
-			token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (any, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, jwt.ErrSignatureInvalid
-				}
-				return []byte(jwtSecret), nil
-			})
-			if err != nil || !token.Valid {
+			claims, err := validator.Validate(r.Context(), parts[1])
+			if err != nil {
 				log.Warn().Err(err).Str("ip", r.RemoteAddr).Msg("token validation failed")
+				// Audit: token_invalid
+				_ = audit.Create(r.Context(), domain.CreateAuditLogInput{
+					Action:    domain.AuditTokenInvalid,
+					IPAddress: r.RemoteAddr,
+					UserAgent: r.UserAgent(),
+					Metadata:  map[string]any{"error": err.Error()},
+				})
 				writeError(w, http.StatusUnauthorized, "invalid or expired token")
-				return
-			}
-
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				writeError(w, http.StatusUnauthorized, "invalid token claims")
 				return
 			}
 
 			ctx := r.Context()
 
-			// Extract user ID
-			if sub, ok := claims["sub"].(string); ok {
-				if uid, err := uuid.Parse(sub); err == nil {
-					ctx = domain.ContextWithUserID(ctx, uid)
+			// Set Keycloak subject
+			ctx = domain.ContextWithUserSub(ctx, claims.Subject)
+
+			// Set email
+			if claims.Email != "" {
+				ctx = domain.ContextWithUserEmail(ctx, claims.Email)
+			}
+
+			// Set tenant_id from custom claim
+			if claims.TenantID != "" {
+				if tid, err := uuid.Parse(claims.TenantID); err == nil {
+					ctx = domain.ContextWithTenantID(ctx, tid)
 				}
 			}
 
-			// Extract email
-			if email, ok := claims["email"].(string); ok {
-				ctx = domain.ContextWithUserEmail(ctx, email)
-			}
-
-			// Extract tenant ID
-			if tid, ok := claims["tenant_id"].(string); ok {
-				if tenantID, err := uuid.Parse(tid); err == nil {
-					ctx = domain.ContextWithTenantID(ctx, tenantID)
-				}
-			}
-
-			// Extract permissions
-			if permsRaw, ok := claims["permissions"].([]any); ok {
-				var perms []domain.Permission
-				for _, p := range permsRaw {
-					if ps, ok := p.(string); ok {
-						parts := strings.SplitN(ps, ":", 2)
-						if len(parts) == 2 {
-							perms = append(perms, domain.Permission{
-								Resource: parts[0],
-								Action:   parts[1],
-							})
-						}
-					}
-				}
-				ctx = domain.ContextWithPermissions(ctx, perms)
-			}
+			// Set client roles
+			ctx = domain.ContextWithClientRoles(ctx, claims.ClientRoles)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// OptionalAuth tries to parse the token but does not reject unauthenticated requests.
-func OptionalAuth(jwtSecret string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				next.ServeHTTP(w, r)
-				return
-			}
+// TenantFromHeader extracts X-Tenant-ID header and sets it in context.
+// JWT tenant_id claim takes precedence if already set.
+func TenantFromHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 
-			// Delegate to full auth
-			JWTAuth(jwtSecret)(next).ServeHTTP(w, r)
-		})
-	}
+		if _, ok := domain.TenantIDFromContext(ctx); !ok {
+			if tenantHeader := r.Header.Get("X-Tenant-ID"); tenantHeader != "" {
+				if tid, err := uuid.Parse(tenantHeader); err == nil {
+					ctx = domain.ContextWithTenantID(ctx, tid)
+				}
+			}
+		}
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // RequireTenant ensures tenant_id is present in context.
@@ -117,30 +96,19 @@ func RequireTenant(next http.Handler) http.Handler {
 	})
 }
 
-// TenantFromHeader extracts X-Tenant-ID header and sets it in context.
-// This is used for API gateway scenarios where the gateway resolves the tenant.
-func TenantFromHeader(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		// Only set if not already in context (JWT takes precedence)
-		if _, ok := domain.TenantIDFromContext(ctx); !ok {
-			if tenantHeader := r.Header.Get("X-Tenant-ID"); tenantHeader != "" {
-				if tid, err := uuid.Parse(tenantHeader); err == nil {
-					ctx = domain.ContextWithTenantID(ctx, tid)
-				}
-			}
-		}
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// RequirePermission checks that the current user has a specific permission.
-func RequirePermission(resource, action string) func(http.Handler) http.Handler {
+// RequirePermission checks that the authenticated user's Keycloak roles
+// grant the required permission, using the permission matrix in auth.RolePermissions.
+func RequirePermission(perm auth.Permission) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !domain.HasPermission(r.Context(), resource, action) {
+			roles := domain.ClientRolesFromContext(r.Context())
+			perms := auth.ResolvePermissions(roles)
+			if !auth.HasPermission(perms, perm) {
+				sub, _ := domain.UserSubFromContext(r.Context())
+				log.Warn().
+					Str("sub", sub).
+					Str("permission", string(perm)).
+					Msg("access denied: insufficient permissions")
 				writeError(w, http.StatusForbidden, "insufficient permissions")
 				return
 			}
@@ -149,3 +117,37 @@ func RequirePermission(resource, action string) func(http.Handler) http.Handler 
 	}
 }
 
+// ProvisionUser upserts the user record from JWT claims on every authenticated request.
+// This ensures users are automatically provisioned in the local DB when they
+// first authenticate via Keycloak.
+func ProvisionUser(users domain.UserRepository) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			sub, ok := domain.UserSubFromContext(ctx)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			email, _ := domain.UserEmailFromContext(ctx)
+
+			// Upsert: create or update the user from Keycloak claims
+			user, err := users.Upsert(ctx, domain.UpsertUserInput{
+				Sub:   sub,
+				Email: email,
+			})
+			if err != nil {
+				log.Error().Err(err).Str("sub", sub).Msg("failed to provision user")
+				writeError(w, http.StatusInternalServerError, "user provisioning failed")
+				return
+			}
+
+			// Set internal user ID in context
+			ctx = domain.ContextWithUserID(ctx, user.ID)
+			_ = users.UpdateLastLogin(ctx, user.ID)
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}

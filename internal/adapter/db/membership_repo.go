@@ -20,75 +20,84 @@ func NewMembershipRepo(pool *pgxpool.Pool) *MembershipRepo {
 	return &MembershipRepo{pool: pool}
 }
 
-func (r *MembershipRepo) Create(ctx context.Context, tenantID uuid.UUID, input domain.CreateMembershipInput) (*domain.Membership, error) {
+const memberCols = `id, tenant_id, user_id, role, status, created_at, updated_at`
+
+func scanMembership(row pgx.Row) (*domain.Membership, error) {
 	var m domain.Membership
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO memberships (tenant_id, user_id, role_id)
+	err := row.Scan(&m.ID, &m.TenantID, &m.UserID, &m.Role, &m.Status, &m.CreatedAt, &m.UpdatedAt)
+	return &m, err
+}
+
+func (r *MembershipRepo) Create(ctx context.Context, tenantID uuid.UUID, input domain.CreateMembershipInput) (*domain.Membership, error) {
+	m, err := scanMembership(r.pool.QueryRow(ctx,
+		`INSERT INTO memberships (tenant_id, user_id, role)
 		 VALUES ($1, $2, $3)
-		 RETURNING id, tenant_id, user_id, role_id, status, created_at, updated_at`,
-		tenantID, input.UserID, input.RoleID,
-	).Scan(&m.ID, &m.TenantID, &m.UserID, &m.RoleID, &m.Status, &m.CreatedAt, &m.UpdatedAt)
+		 RETURNING `+memberCols,
+		tenantID, input.UserID, input.Role,
+	))
 	if err != nil {
 		return nil, fmt.Errorf("creating membership: %w", err)
 	}
-	return &m, nil
+	return m, nil
 }
 
 func (r *MembershipRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Membership, error) {
-	var m domain.Membership
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, tenant_id, user_id, role_id, status, created_at, updated_at
-		 FROM memberships WHERE id = $1`, id,
-	).Scan(&m.ID, &m.TenantID, &m.UserID, &m.RoleID, &m.Status, &m.CreatedAt, &m.UpdatedAt)
+	m, err := scanMembership(r.pool.QueryRow(ctx,
+		`SELECT `+memberCols+` FROM memberships WHERE id = $1`, id,
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting membership: %w", err)
 	}
-	return &m, nil
+	return m, nil
 }
 
 func (r *MembershipRepo) GetByTenantAndUser(ctx context.Context, tenantID, userID uuid.UUID) (*domain.Membership, error) {
-	var m domain.Membership
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, tenant_id, user_id, role_id, status, created_at, updated_at
-		 FROM memberships WHERE tenant_id = $1 AND user_id = $2`, tenantID, userID,
-	).Scan(&m.ID, &m.TenantID, &m.UserID, &m.RoleID, &m.Status, &m.CreatedAt, &m.UpdatedAt)
+	m, err := scanMembership(r.pool.QueryRow(ctx,
+		`SELECT `+memberCols+` FROM memberships WHERE tenant_id = $1 AND user_id = $2`, tenantID, userID,
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting membership: %w", err)
 	}
-	return &m, nil
+	return m, nil
 }
 
-func (r *MembershipRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]domain.Membership, error) {
+func (r *MembershipRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]domain.Membership, int, error) {
+	var total int
+	if err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM memberships WHERE tenant_id = $1`, tenantID,
+	).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("counting memberships: %w", err)
+	}
+
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.id, m.tenant_id, m.user_id, m.role_id, m.status, m.created_at, m.updated_at
-		 FROM memberships m WHERE m.tenant_id = $1 ORDER BY m.created_at`, tenantID,
+		`SELECT `+memberCols+` FROM memberships WHERE tenant_id = $1
+		 ORDER BY created_at LIMIT $2 OFFSET $3`, tenantID, limit, offset,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("listing memberships: %w", err)
+		return nil, 0, fmt.Errorf("listing memberships: %w", err)
 	}
 	defer rows.Close()
 
 	var memberships []domain.Membership
 	for rows.Next() {
 		var m domain.Membership
-		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.RoleID, &m.Status, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning membership: %w", err)
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.Role, &m.Status, &m.CreatedAt, &m.UpdatedAt); err != nil {
+			return nil, 0, fmt.Errorf("scanning membership: %w", err)
 		}
 		memberships = append(memberships, m)
 	}
-	return memberships, nil
+	return memberships, total, nil
 }
 
 func (r *MembershipRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]domain.Membership, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.id, m.tenant_id, m.user_id, m.role_id, m.status, m.created_at, m.updated_at
-		 FROM memberships m WHERE m.user_id = $1 ORDER BY m.created_at`, userID,
+		`SELECT `+memberCols+` FROM memberships WHERE user_id = $1 ORDER BY created_at`, userID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing memberships by user: %w", err)
@@ -98,7 +107,7 @@ func (r *MembershipRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]do
 	var memberships []domain.Membership
 	for rows.Next() {
 		var m domain.Membership
-		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.RoleID, &m.Status, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.UserID, &m.Role, &m.Status, &m.CreatedAt, &m.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning membership: %w", err)
 		}
 		memberships = append(memberships, m)
@@ -106,21 +115,20 @@ func (r *MembershipRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]do
 	return memberships, nil
 }
 
-func (r *MembershipRepo) UpdateRole(ctx context.Context, id uuid.UUID, roleID uuid.UUID) (*domain.Membership, error) {
-	var m domain.Membership
-	err := r.pool.QueryRow(ctx,
-		`UPDATE memberships SET role_id=$1, updated_at=now()
+func (r *MembershipRepo) UpdateRole(ctx context.Context, id uuid.UUID, role string) (*domain.Membership, error) {
+	m, err := scanMembership(r.pool.QueryRow(ctx,
+		`UPDATE memberships SET role=$1, updated_at=now()
 		 WHERE id=$2
-		 RETURNING id, tenant_id, user_id, role_id, status, created_at, updated_at`,
-		roleID, id,
-	).Scan(&m.ID, &m.TenantID, &m.UserID, &m.RoleID, &m.Status, &m.CreatedAt, &m.UpdatedAt)
+		 RETURNING `+memberCols,
+		role, id,
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("updating membership role: %w", err)
 	}
-	return &m, nil
+	return m, nil
 }
 
 func (r *MembershipRepo) Delete(ctx context.Context, id uuid.UUID) error {

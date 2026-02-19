@@ -14,13 +14,14 @@ import (
 
 	"github.com/finch-co/cashflow/internal/adapter/db"
 	httpAdapter "github.com/finch-co/cashflow/internal/adapter/http"
+	"github.com/finch-co/cashflow/internal/auth"
 	"github.com/finch-co/cashflow/internal/config"
+	"github.com/finch-co/cashflow/internal/events"
 	"github.com/finch-co/cashflow/internal/observability"
 	"github.com/finch-co/cashflow/internal/usecase"
 )
 
 func main() {
-	// Structured logging
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
@@ -54,33 +55,48 @@ func run() error {
 	defer pool.Close()
 	log.Info().Str("host", cfg.Database.Host).Int("port", cfg.Database.Port).Msg("connected to database")
 
+	// Connect to NATS JetStream
+	nc, js, err := events.Connect(ctx, cfg.NATS)
+	if err != nil {
+		return fmt.Errorf("connecting to nats: %w", err)
+	}
+	defer nc.Close()
+
+	// Create event publisher
+	publisher := events.NewPublisher(js)
+	_ = publisher // available for usecases that need to emit domain events
+	_ = js        // available for starting consumer workers
+
+	// Init Keycloak JWKS client + JWT validator
+	jwksClient := auth.NewJWKSClient(
+		cfg.Auth.JWKSURL,
+		time.Duration(cfg.Auth.JWKSCacheTTL)*time.Second,
+	)
+	jwtValidator := auth.NewValidator(jwksClient, cfg.Auth.IssuerURL, cfg.Auth.Audience)
+	log.Info().Str("issuer", cfg.Auth.IssuerURL).Str("jwks", cfg.Auth.JWKSURL).Msg("keycloak auth configured")
+
 	// Init repositories
 	tenantRepo := db.NewTenantRepo(pool)
 	userRepo := db.NewUserRepo(pool)
-	roleRepo := db.NewRoleRepo(pool)
-	permissionRepo := db.NewPermissionRepo(pool)
 	membershipRepo := db.NewMembershipRepo(pool)
 	auditRepo := db.NewAuditLogRepo(pool)
 
 	// Init use cases
-	tenantUC := usecase.NewTenantUseCase(tenantRepo, roleRepo, permissionRepo, auditRepo)
-	authUC := usecase.NewAuthUseCase(userRepo, membershipRepo, roleRepo, auditRepo, cfg.Auth)
-	userUC := usecase.NewUserUseCase(userRepo, membershipRepo, roleRepo, auditRepo)
+	tenantUC := usecase.NewTenantUseCase(tenantRepo, membershipRepo, auditRepo)
+	memberUC := usecase.NewMemberUseCase(userRepo, membershipRepo, auditRepo)
 
 	// Init HTTP handlers
 	tenantHandler := httpAdapter.NewTenantHandler(tenantUC)
-	authHandler := httpAdapter.NewAuthHandler(authUC)
-	userHandler := httpAdapter.NewUserHandler(userUC)
-	roleHandler := httpAdapter.NewRoleHandler(roleRepo, permissionRepo, auditRepo)
+	memberHandler := httpAdapter.NewMemberHandler(memberUC)
 	auditHandler := httpAdapter.NewAuditHandler(auditRepo)
 
 	// Build router
 	router := httpAdapter.NewRouter(httpAdapter.RouterDeps{
-		JWTSecret: cfg.Auth.JWTSecret,
+		Validator: jwtValidator,
+		Users:     userRepo,
+		AuditRepo: auditRepo,
 		Tenants:   tenantHandler,
-		Auth:      authHandler,
-		Users:     userHandler,
-		Roles:     roleHandler,
+		Members:   memberHandler,
 		Audit:     auditHandler,
 	})
 
@@ -93,7 +109,6 @@ func run() error {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Graceful shutdown
 	errCh := make(chan error, 1)
 	go func() {
 		log.Info().Str("addr", srv.Addr).Msg("starting HTTP server")

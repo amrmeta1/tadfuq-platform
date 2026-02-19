@@ -9,13 +9,28 @@ services:
       POSTGRES_PASSWORD: cashflow
       POSTGRES_DB: cashflow
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cashflow"]
       interval: 5s
       timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: cashflow-nats
+    command: ["--jetstream", "--store_dir", "/data", "--http_port", "8222", "-p", "4222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
       retries: 5
 
   keycloak:
@@ -33,10 +48,27 @@ services:
     ports:
       - "8180:8180"
     volumes:
-      - ./keycloak-realm.json:/opt/keycloak/data/import/cashflow-realm.json:ro
+      - ../keycloak/realm-export.json:/opt/keycloak/data/import/cashflow-realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: cashflow-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   tenant-service:
     build:
@@ -53,16 +85,52 @@ services:
       DB_NAME: cashflow
       DB_SSLMODE: disable
       AUTH_ISSUER_URL: http://keycloak:8180/realms/cashflow
+      AUTH_JWKS_URL: http://keycloak:8180/realms/cashflow/protocol/openid-connect/certs
       AUTH_AUDIENCE: cashflow-api
-      AUTH_LOCAL_ENABLED: "true"
-      AUTH_JWT_SECRET: dev-secret-change-me-in-production
+      AUTH_JWKS_CACHE_TTL: "300"
+      NATS_URL: nats://nats:4222
       OTEL_ENABLED: "false"
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ingestion-service:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.ingestion
+    container_name: cashflow-ingestion-service
+    environment:
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8081"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: cashflow
+      DB_PASSWORD: cashflow
+      DB_NAME: cashflow
+      DB_SSLMODE: disable
+      AUTH_ISSUER_URL: http://keycloak:8180/realms/cashflow
+      AUTH_JWKS_URL: http://keycloak:8180/realms/cashflow/protocol/openid-connect/certs
+      AUTH_AUDIENCE: cashflow-api
+      AUTH_JWKS_CACHE_TTL: "300"
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      RABBITMQ_PREFETCH_COUNT: "10"
+      OTEL_ENABLED: "false"
+      OTEL_SERVICE_NAME: cashflow-ingestion-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   pgdata:
+  natsdata:
+  rabbitmqdata:

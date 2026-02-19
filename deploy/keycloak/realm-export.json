@@ -1,0 +1,190 @@
+{
+  "realm": "cashflow",
+  "enabled": true,
+  "displayName": "CashFlow.ai",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "failureFactor": 5,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      {
+        "name": "default-roles-cashflow",
+        "composite": true,
+        "composites": {
+          "client": {
+            "cashflow-api": ["accountant_readonly"]
+          }
+        }
+      }
+    ],
+    "client": {
+      "cashflow-api": [
+        {
+          "name": "tenant_admin",
+          "description": "Tenant administrator — full access to all tenant resources"
+        },
+        {
+          "name": "owner",
+          "description": "Business owner — manage members and view all data"
+        },
+        {
+          "name": "finance_manager",
+          "description": "Finance manager — read access plus audit logs"
+        },
+        {
+          "name": "accountant_readonly",
+          "description": "Accountant — read-only access to tenant data"
+        }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "cashflow-api",
+      "name": "CashFlow API",
+      "description": "Backend API service for CashFlow.ai",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "secret": "cashflow-api-secret",
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8080"
+      ],
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email",
+        "roles"
+      ],
+      "optionalClientScopes": [],
+      "protocolMappers": [
+        {
+          "name": "tenant_id_mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "tenant_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "client_roles_mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String",
+            "usermodel.clientRoleMapping.clientId": "cashflow-api"
+          }
+        },
+        {
+          "name": "audience_mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "cashflow-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "fullScopeAllowed": true
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@demo.com",
+      "email": "admin@demo.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Admin",
+      "lastName": "User",
+      "attributes": {
+        "tenant_id": ["00000000-0000-0000-0000-000000000001"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin123",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "cashflow-api": ["tenant_admin"]
+      }
+    },
+    {
+      "username": "owner@demo.com",
+      "email": "owner@demo.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Business",
+      "lastName": "Owner",
+      "attributes": {
+        "tenant_id": ["00000000-0000-0000-0000-000000000001"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "owner123",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "cashflow-api": ["owner"]
+      }
+    },
+    {
+      "username": "accountant@demo.com",
+      "email": "accountant@demo.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Accountant",
+      "lastName": "User",
+      "attributes": {
+        "tenant_id": ["00000000-0000-0000-0000-000000000001"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "accountant123",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "cashflow-api": ["accountant_readonly"]
+      }
+    }
+  ]
+}

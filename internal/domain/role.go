@@ -1,38 +1,23 @@
+// Package domain — role.go
+// RBAC roles are managed by Keycloak client roles.
+// The available roles are: tenant_admin, owner, finance_manager, accountant_readonly.
+// Permission resolution is handled by internal/auth/permissions.go.
 package domain
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
-
-type Role struct {
-	ID          uuid.UUID    `json:"id"`
-	TenantID    uuid.UUID    `json:"tenant_id"`
-	Name        string       `json:"name"`
-	Description string       `json:"description"`
-	IsSystem    bool         `json:"is_system"`
-	Permissions []Permission `json:"permissions,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+// ValidRoles lists the Keycloak client roles recognized by the platform.
+var ValidRoles = []string{
+	"tenant_admin",
+	"owner",
+	"finance_manager",
+	"accountant_readonly",
 }
 
-type Permission struct {
-	ID          uuid.UUID `json:"id"`
-	Resource    string    `json:"resource"`
-	Action      string    `json:"action"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-type CreateRoleInput struct {
-	Name          string      `json:"name"`
-	Description   string      `json:"description,omitempty"`
-	PermissionIDs []uuid.UUID `json:"permission_ids"`
-}
-
-type UpdateRoleInput struct {
-	Name          *string      `json:"name,omitempty"`
-	Description   *string      `json:"description,omitempty"`
-	PermissionIDs *[]uuid.UUID `json:"permission_ids,omitempty"`
+// IsValidRole checks whether a role string is a recognized Keycloak client role.
+func IsValidRole(role string) bool {
+	for _, r := range ValidRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }
