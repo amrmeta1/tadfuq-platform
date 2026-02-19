@@ -43,10 +43,17 @@ export default function MembersPage() {
   const [newRole, setNewRole] = useState<Role>("accountant_readonly");
   const [showAdd, setShowAdd] = useState(false);
 
+  const MOCK_MEMBERS = [
+    { id: "m1", user_id: "admin@demo.com", role: "tenant_admin" as const, status: "active" as const, tenant_id: "", created_at: "", updated_at: "" },
+    { id: "m2", user_id: "finance@demo.com", role: "finance_manager" as const, status: "active" as const, tenant_id: "", created_at: "", updated_at: "" },
+    { id: "m3", user_id: "accountant@demo.com", role: "accountant_readonly" as const, status: "active" as const, tenant_id: "", created_at: "", updated_at: "" },
+  ];
+
   const { data, isLoading } = useQuery({
     queryKey: ["members", currentTenant?.id],
     queryFn: () => listMembers(currentTenant!.id),
     enabled: !!currentTenant,
+    retry: false,
   });
 
   const addMutation = useMutation({
@@ -66,7 +73,7 @@ export default function MembersPage() {
       queryClient.invalidateQueries({ queryKey: ["members"] }),
   });
 
-  const members = data?.data ?? [];
+  const members = data?.data?.length ? data.data : MOCK_MEMBERS;
   const canAdd = can("member:add");
   const canRemove = can("member:remove");
 

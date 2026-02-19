@@ -4,36 +4,22 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
-import { usePermissions } from "@/lib/hooks/use-permissions";
 import { listAuditLogs } from "@/lib/api/tenant-api";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { RouteGuard } from "@/components/layout/route-guard";
 
-export default function AuditPage() {
+function AuditPageContent() {
   const { t, locale } = useI18n();
   const { currentTenant } = useTenant();
-  const { can } = usePermissions();
   const loc = locale === "ar" ? "ar-SA" : "en-SA";
 
   const { data, isLoading } = useQuery({
     queryKey: ["audit-logs", currentTenant?.id],
     queryFn: () => listAuditLogs(50, 0),
-    enabled: !!currentTenant && can("audit:read"),
+    enabled: !!currentTenant,
   });
-
-  if (!can("audit:read")) {
-    return (
-      <div className="flex items-center justify-center p-12 text-muted-foreground">
-        You do not have permission to view audit logs.
-      </div>
-    );
-  }
 
   const logs = data?.data ?? [];
 
@@ -93,5 +79,13 @@ export default function AuditPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AuditPage() {
+  return (
+    <RouteGuard allowedRoles={["tenant_admin", "owner"]}>
+      <AuditPageContent />
+    </RouteGuard>
   );
 }

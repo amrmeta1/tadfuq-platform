@@ -20,9 +20,17 @@ export default function OrganizationPage() {
     queryKey: ["tenant", currentTenant?.id],
     queryFn: () => getTenant(currentTenant!.id),
     enabled: !!currentTenant,
+    retry: false,
   });
 
-  const tenant = data?.data ?? currentTenant;
+  const MOCK_TENANT = {
+    name: "Demo Organization",
+    slug: "demo-org",
+    plan: "Growth",
+    status: "active" as const,
+  };
+
+  const tenant = data?.data ?? currentTenant ?? MOCK_TENANT;
 
   return (
     <Card>

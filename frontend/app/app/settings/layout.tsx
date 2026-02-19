@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { usePermissions } from "@/lib/hooks/use-permissions";
 import { cn } from "@/lib/utils";
+import { RouteGuard } from "@/components/layout/route-guard";
 
 const tabs = [
   { href: "/app/settings/organization", labelKey: "organization" as const },
@@ -24,28 +25,30 @@ export default function SettingsLayout({
   const { can } = usePermissions();
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
-      <div className="flex gap-1 border-b">
-        {tabs.map((tab) => {
-          if ("permission" in tab && tab.permission && !can(tab.permission)) return null;
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className={cn(
-                "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
-                pathname === tab.href
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {t.nav[tab.labelKey]}
-            </Link>
-          );
-        })}
+    <RouteGuard allowedRoles={["tenant_admin", "owner"]}>
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
+        <div className="flex gap-1 border-b">
+          {tabs.map((tab) => {
+            if ("permission" in tab && tab.permission && !can(tab.permission)) return null;
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+                  pathname === tab.href
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {t.nav[tab.labelKey]}
+              </Link>
+            );
+          })}
+        </div>
+        {children}
       </div>
-      {children}
-    </div>
+    </RouteGuard>
   );
 }
