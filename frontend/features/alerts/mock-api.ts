@@ -2,7 +2,30 @@ import type { Alert, AlertAction } from "./types";
 
 export const MOCK_ALERTS: Alert[] = [
   {
+    id: "a0",
+    type: "overdue_payment",
+    severity: "high",
+    title_en: "Overdue payment: TechCorp L.L.C",
+    title_ar: "دفعة متأخرة: شركة تك كورب",
+    description_en: "Invoice INV-2026-089 for SAR 150,000 is 25 days overdue with no response.",
+    description_ar: "الفاتورة INV-2026-089 بقيمة ١٥٠٬٠٠٠ ريال متأخرة ٢٥ يومًا دون أي رد.",
+    why_en: "Payment terms were Net-30. No payment received and no response to follow-up emails sent on days 10 and 20. Client has a history of on-time payments.",
+    why_ar: "شروط الدفع كانت ٣٠ يومًا. لم يتم استلام أي دفعة ولا رد على رسائل المتابعة المرسلة في اليومين ١٠ و٢٠. للعميل سجل جيد في الدفع في الوقت المحدد.",
+    status: "open",
+    created_at: new Date(Date.now() - 1 * 3_600_000).toISOString(),
+    related_amount: 150_000,
+    metadata: {
+      clientName: "TechCorp L.L.C",
+      amount: 150_000,
+      currency: "SAR",
+      daysOverdue: 25,
+      phone: "966500000000",
+      invoiceRef: "INV-2026-089",
+    },
+  },
+  {
     id: "a1",
+    type: "cash_floor",
     severity: "high",
     title_en: "Cash floor breach projected in 9 days",
     title_ar: "توقع اختراق الحد الأدنى للنقد خلال ٩ أيام",

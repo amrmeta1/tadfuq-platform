@@ -12,6 +12,7 @@ import {
 import { cn, formatCurrency } from "@/lib/utils";
 import { SEVERITY_CONFIG, STATUS_CONFIG, relativeTime } from "./columns";
 import { useAlertAction } from "./hooks";
+import { AIDunningWorkflow } from "@/components/alerts/ai-dunning-workflow";
 import type { Alert } from "./types";
 
 interface AlertSheetProps {
@@ -133,6 +134,17 @@ export function AlertSheet({
                   </ul>
                 </section>
               </div>
+
+              {/* ── AI Dunning Workflow (overdue_payment only) ── */}
+              {alert.type === "overdue_payment" && alert.metadata && (
+                <div className="px-6 pb-2">
+                  <AIDunningWorkflow
+                    metadata={alert.metadata}
+                    isAr={isAr}
+                    locale={locale}
+                  />
+                </div>
+              )}
 
               {/* ── Footer actions ── */}
               <div className="border-t px-6 py-4 flex gap-2 shrink-0">
