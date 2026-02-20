@@ -1,17 +1,23 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Plus, FileText, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { Printer, Link2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
+import {
+  Select, SelectContent, SelectItem,
+  SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
 import { useToast } from "@/components/ui/toast";
-import { useReports, useGenerateReport } from "@/features/reports/hooks";
-import { buildReportColumns } from "@/features/reports/report-columns";
-import { GenerateDialog } from "@/features/reports/generate-dialog";
-import { ReportPreview } from "@/features/reports/report-preview";
-import type { Report, GenerateFormValues } from "@/features/reports/types";
+import { A4ReportDocument } from "@/components/reports/A4ReportDocument";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const PERIODS = ["Q1 2026", "Q2 2026", "Q3 2026", "Q4 2026"] as const;
+type Period = typeof PERIODS[number];
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ReportsPage() {
   const { locale, dir } = useI18n();
@@ -19,92 +25,77 @@ export default function ReportsPage() {
   const { toast } = useToast();
   const isAr = locale === "ar";
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [previewReport, setPreviewReport] = useState<Report | null>(null);
+  const [period, setPeriod] = useState<Period>("Q1 2026");
 
-  const { data: reports = [], isLoading } = useReports(currentTenant?.id);
-  const { mutate: generate, isPending } = useGenerateReport(currentTenant?.id);
+  const company = currentTenant?.name ?? "TechCorp L.L.C";
 
-  const handleGenerate = (values: GenerateFormValues) => {
-    generate(values, {
-      onSuccess: (report) => {
-        setDialogOpen(false);
-        setPreviewReport(report);
-        toast({
-          title: isAr ? "تم إنشاء التقرير" : "Report generated",
-          variant: "success",
-        });
-      },
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).catch(() => {});
+    toast({
+      title: isAr ? "تم نسخ الرابط" : "Link copied to clipboard",
+      variant: "success",
     });
   };
 
-  const columns = useMemo(
-    () => buildReportColumns(isAr, locale, setPreviewReport),
-    [isAr, locale]
-  );
-
   return (
-    <div dir={dir} className="flex h-full" data-page-full>
-      {/* ── Left: report list ── */}
-      <div className={`flex flex-col border-e bg-card ${previewReport ? "w-[420px] shrink-0" : "flex-1"}`}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b shrink-0">
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-muted-foreground" />
-            <h1 className="text-sm font-semibold">
-              {isAr ? "التقارير" : "Reports"}
-            </h1>
-          </div>
-          <Button
-            size="sm"
-            className="h-7 text-xs gap-1.5"
-            onClick={() => setDialogOpen(true)}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {isAr ? "إنشاء تقرير" : "Generate"}
-          </Button>
+    <div
+      dir={dir}
+      className="bg-zinc-100 dark:bg-zinc-950 min-h-full py-10 print:bg-white print:py-0 overflow-y-auto"
+    >
+      {/* ── Action bar (screen only) ── */}
+      <div className="print:hidden mb-8 max-w-[210mm] mx-auto px-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <h1 className="text-xl font-semibold">
+            {isAr ? "تقارير مجلس الإدارة التنفيذية" : "Executive Board Reports"}
+          </h1>
         </div>
 
-        {/* Table */}
-        <div className="flex-1 overflow-auto">
-          <DataTable<Report>
-            columns={columns}
-            data={reports}
-            isLoading={isLoading}
-            skeletonRows={5}
-            getRowId={(r) => r.id}
-            onRowClick={(r) => r.status !== "generating" && setPreviewReport(r)}
-            selectedRowId={previewReport?.id ?? null}
-            emptyState={
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <CheckCircle2 className="h-8 w-8 opacity-30" />
-                <p className="text-sm">
-                  {isAr ? "لا توجد تقارير بعد" : "No reports yet"}
-                </p>
-              </div>
-            }
-          />
+        <div className="flex items-center gap-2">
+          {/* Period selector */}
+          <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
+            <SelectTrigger className="h-8 w-[110px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PERIODS.map((p) => (
+                <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Share link */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={handleShare}
+          >
+            <Link2 className="h-3.5 w-3.5" />
+            {isAr ? "مشاركة" : "Share"}
+          </Button>
+
+          {/* Export / Print */}
+          <Button
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => window.print()}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            {isAr ? "🖨️ تصدير PDF / طباعة" : "🖨️ Export PDF / Print"}
+          </Button>
         </div>
       </div>
 
-      {/* ── Right: A4 preview ── */}
-      {previewReport && (
-        <ReportPreview
-          report={previewReport}
-          onClose={() => setPreviewReport(null)}
-          isAr={isAr}
-          locale={locale}
-        />
-      )}
-
-      {/* ── Generate dialog ── */}
-      <GenerateDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmit={handleGenerate}
-        isPending={isPending}
+      {/* ── A4 Document ── */}
+      <A4ReportDocument
+        companyName={company}
+        period={period}
         isAr={isAr}
       />
+
+      {/* Bottom breathing room (screen only) */}
+      <div className="print:hidden h-16" />
     </div>
   );
 }
