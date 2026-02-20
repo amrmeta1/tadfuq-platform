@@ -10,12 +10,16 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { Boxes } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
 import { useScenarioPlanner } from "@/lib/hooks/useScenarioPlanner";
+import { useForecastSimulation } from "@/features/forecast/use-forecast-simulation";
+import { ForecastChart } from "@/features/forecast/forecast-chart";
+import { ScenarioSandbox } from "@/features/forecast/scenario-sandbox";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +57,9 @@ function ChartTooltipContent({ active, payload, label }: any) {
 export default function ScenarioPlannerPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
+
+  const { baseline, simulated, params, setParam, reset, cashZeroDate } =
+    useForecastSimulation();
 
   const {
     assumptions,
@@ -393,6 +400,54 @@ export default function ScenarioPlannerPage() {
             </div>
           </CardContent>
         </Card>
+
+      {/* ── Section divider ── */}
+        <div className="flex items-center gap-3 pt-2">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+            <Boxes className="h-3 w-3" />
+            {isAr ? "محاكي الصدمات المالية" : "Financial Stress Simulator"}
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        {/* ── Stress simulator: chart + sandbox ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+
+          {/* Base vs Simulated chart */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="text-sm font-semibold">
+                  {isAr ? "الأساسي مقابل المحاكاة (يومياً)" : "Base vs Simulated Cash Balance (Daily)"}
+                </CardTitle>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-5 border-t-2 border-dashed border-muted-foreground/50" />
+                    {isAr ? "الأساسي" : "Base"}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-5 border-t-2 border-primary" />
+                    {isAr ? "المحاكاة" : "Simulated"}
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <ForecastChart data={simulated} locale={locale} isAr={isAr} />
+            </CardContent>
+          </Card>
+
+          {/* Scenario Sandbox controls */}
+          <ScenarioSandbox
+            params={params}
+            setParam={setParam}
+            reset={reset}
+            cashZeroDate={cashZeroDate}
+            isAr={isAr}
+            locale={locale}
+          />
+        </div>
 
       </div>
     </div>

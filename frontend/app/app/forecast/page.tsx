@@ -1,178 +1,148 @@
 "use client";
 
-import { TrendingUp, AlertTriangle, Download } from "lucide-react";
+import Link from "next/link";
+import { TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/context";
-import { cn, formatCurrency, formatDate } from "@/lib/utils";
-import { useForecastSimulation } from "@/features/forecast/use-forecast-simulation";
-import { ForecastChart } from "@/features/forecast/forecast-chart";
-import { ScenarioSandbox } from "@/features/forecast/scenario-sandbox";
+import { MasterForecastChart, type ForecastDataPoint } from "@/components/forecast/MasterForecastChart";
 
-const CURRENCY = "SAR";
+// ── Master forecast mock data (12 weeks) ──────────────────────────────────────
+const MASTER_DATA: ForecastDataPoint[] = [
+  { week: "Week 1",  actual: 480_000, forecast: null },
+  { week: "Week 2",  actual: 510_000, forecast: null },
+  { week: "Week 3",  actual: 495_000, forecast: null },
+  { week: "Week 4",  actual: 430_000, forecast: null },
+  { week: "Week 5",  actual: 460_000, forecast: null },
+  { week: "Week 6",  actual: 450_000, forecast: null },
+  { week: "Week 7",  actual: 450_000, forecast: 450_000 },
+  { week: "Week 8",  actual: null,    forecast: 390_000 },
+  { week: "Week 9",  actual: null,    forecast: 210_000 },
+  { week: "Week 10", actual: null,    forecast: -45_000, isAnomaly: true,
+    aiNote: "⚠️ Critical Drop: Overlapping Q1 VAT payment (SAR 180k) and Payroll. Reallocation recommended." },
+  { week: "Week 11", actual: null,    forecast: 80_000 },
+  { week: "Week 12", actual: null,    forecast: 175_000 },
+];
 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function ForecastPage() {
-  const { t, locale, dir } = useI18n();
+  const { locale, dir } = useI18n();
   const isAr = locale === "ar";
 
-  const { baseline, simulated, params, setParam, reset, cashZeroDate } =
-    useForecastSimulation();
-
-  // KPI calculations from simulated data
-  const simMinBalance = Math.min(...simulated.map((d) => d.simulatedBalance));
-  const simTotalInflow = simulated.reduce((s, d) => s + d.simulatedInflow, 0);
-  const simTotalOutflow = simulated.reduce((s, d) => s + d.simulatedOutflow, 0);
-  const baseMinBalance = Math.min(...baseline.map((d) => d.baseBalance));
-
-  const kpis = [
-    {
-      label: isAr ? "الرصيد الابتدائي" : "Starting Balance",
-      value: 500_000,
-      color: "text-foreground",
-    },
-    {
-      label: isAr ? "أدنى رصيد (محاكاة)" : "Projected Low (Sim)",
-      value: simMinBalance,
-      color: simMinBalance < 0 ? "outflow" : simMinBalance < 50_000 ? "text-amber-600" : "inflow",
-    },
-    {
-      label: isAr ? "إجمالي التدفقات (محاكاة)" : "Total Inflows (Sim)",
-      value: simTotalInflow,
-      color: "inflow",
-    },
-    {
-      label: isAr ? "إجمالي المدفوعات (محاكاة)" : "Total Outflows (Sim)",
-      value: simTotalOutflow,
-      color: "outflow",
-    },
-  ];
-
   return (
-    <div dir={dir} className="flex flex-col h-full" data-page-full>
-      {/* ── Top bar ── */}
-      <div className="flex items-center justify-between px-6 py-3 border-b bg-card shrink-0">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          <h1 className="text-sm font-semibold">{t.nav.forecast}</h1>
-          {cashZeroDate && (
-            <Badge variant="destructive" className="text-xs gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              {isAr ? "تحذير: نقص السيولة" : "Cash shortfall detected"}
-            </Badge>
-          )}
+    <div dir={dir} className="flex flex-col h-full overflow-y-auto bg-background">
+      <div className="max-w-6xl w-full mx-auto px-4 py-8 space-y-6">
+
+        {/* ── Page title ── */}
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {isAr ? "توقعات السيولة الرئيسية" : "Master AI Cash Flow Forecast"}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isAr
+              ? "عرض مرئي للتدفقات النقدية الفعلية والمتوقعة على مدى ١٢ أسبوعاً."
+              : "Visual overview of historical actuals vs. AI-projected cash positions over 12 weeks."}
+          </p>
         </div>
-        <Button size="sm" variant="outline" className="h-7 text-xs gap-1">
-          <Download className="h-3.5 w-3.5" />
-          {isAr ? "تصدير" : "Export"}
-        </Button>
-      </div>
 
-      {/* ── KPI strip ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 border-b shrink-0">
-        {kpis.map((kpi, i) => (
-          <div key={i} className="px-5 py-3 border-e last:border-e-0">
-            <p className="text-xs text-muted-foreground mb-0.5">{kpi.label}</p>
-            <p className={cn("text-base font-semibold tabular-nums", kpi.color)}>
-              {formatCurrency(kpi.value, CURRENCY, locale)}
-            </p>
-          </div>
-        ))}
-      </div>
+        {/* ── AI Alert Banner ── */}
+        <div className="bg-destructive/10 border border-destructive/30 rounded-xl p-5 flex items-start sm:items-center flex-col sm:flex-row gap-4">
+          <TrendingDown className="text-destructive w-6 h-6 animate-pulse shrink-0" />
+          <p className="text-sm text-destructive leading-relaxed">
+            {isAr ? (
+              <><span className="font-semibold">تنبيه مستشار AI:</span> تم رصد عجز نقدي متوقع بقيمة{" "}
+              <span className="font-bold">SAR 45,000</span> في الأسبوع العاشر. يُنصح فوراً بتأجيل مدفوعات الموردين غير الحرجة.</>
+            ) : (
+              <><span className="font-semibold">Mustashar AI Alert:</span> Projected cash shortfall of{" "}
+              <span className="font-bold">SAR 45,000</span> detected in Week 10. Immediate action required to defer non-critical vendor payments.</>
+            )}
+          </p>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="ms-auto shrink-0 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10"
+          >
+            <Link href="/app/scenario-planner">
+              ⚡ {isAr ? "تشغيل محاكي الاحتمالات" : "Launch What-If Simulator"}
+            </Link>
+          </Button>
+        </div>
 
-      {/* ── Two-column body ── */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── Main column: chart + table ── */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Chart */}
-          <div className="px-5 pt-4 pb-2 shrink-0">
-            {/* Legend */}
-            <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-6 border-t-2 border-dashed border-muted-foreground/50" />
-                {isAr ? "الأساسي" : "Base"}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-6 border-t-2 border-primary" />
-                {isAr ? "المحاكاة" : "Simulated"}
-              </span>
+        {/* ── Master Chart ── */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <CardTitle className="text-sm font-semibold">
+                {isAr ? "توقعات السيولة الرئيسية (١٢ أسبوعاً)" : "Master Cash Flow Forecast (12 Weeks)"}
+              </CardTitle>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-5 border-t-2 border-primary" />
+                  {isAr ? "الفعلي" : "Actuals"}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-5 border-t-2 border-dashed border-amber-500" />
+                  {isAr ? "التوقع" : "Forecast"}
+                </span>
+              </div>
             </div>
-            <ForecastChart data={simulated} locale={locale} isAr={isAr} />
-          </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <MasterForecastChart data={MASTER_DATA} isAr={isAr} />
+          </CardContent>
+        </Card>
 
-          {/* Data table */}
-          <div className="flex-1 overflow-auto border-t">
-            <table className="w-full text-xs">
-              <thead className="sticky top-0 bg-muted/60 backdrop-blur border-b">
-                <tr>
-                  {[
-                    isAr ? "التاريخ" : "Date",
-                    isAr ? "التدفق (أساسي)" : "Inflow (Base)",
-                    isAr ? "التدفق (محاكاة)" : "Inflow (Sim)",
-                    isAr ? "المدفوعات (محاكاة)" : "Outflow (Sim)",
-                    isAr ? "الرصيد (أساسي)" : "Balance (Base)",
-                    isAr ? "الرصيد (محاكاة)" : "Balance (Sim)",
-                    isAr ? "الفارق" : "Variance",
-                  ].map((h) => (
-                    <th key={h} className="px-4 py-2 text-start font-medium text-muted-foreground whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {simulated.map((row, i) => {
-                  const variance = row.simulatedBalance - row.baseBalance;
-                  const isNegSim = row.simulatedBalance <= 0;
-                  return (
-                    <tr
-                      key={i}
-                      className={cn(
-                        "hover:bg-muted/30 transition-colors",
-                        isNegSim && "bg-red-50/50 dark:bg-red-950/20"
-                      )}
-                    >
-                      <td className="px-4 py-1.5 text-muted-foreground tabular-nums whitespace-nowrap">
-                        {formatDate(row.date, locale)}
-                      </td>
-                      <td className="px-4 py-1.5 inflow tabular-nums">
-                        {formatCurrency(row.baseInflow, CURRENCY, locale)}
-                      </td>
-                      <td className="px-4 py-1.5 inflow tabular-nums">
-                        {formatCurrency(row.simulatedInflow, CURRENCY, locale)}
-                      </td>
-                      <td className="px-4 py-1.5 outflow tabular-nums">
-                        {formatCurrency(row.simulatedOutflow, CURRENCY, locale)}
-                      </td>
-                      <td className="px-4 py-1.5 tabular-nums text-muted-foreground">
-                        {formatCurrency(row.baseBalance, CURRENCY, locale)}
-                      </td>
-                      <td className={cn("px-4 py-1.5 tabular-nums font-semibold", isNegSim ? "outflow" : "text-foreground")}>
-                        {formatCurrency(row.simulatedBalance, CURRENCY, locale)}
-                        {isNegSim && <AlertTriangle className="inline ms-1 h-3 w-3 text-destructive" />}
-                      </td>
-                      <td className={cn("px-4 py-1.5 tabular-nums font-medium", variance >= 0 ? "inflow" : "outflow")}>
-                        {variance >= 0 ? "+" : ""}{formatCurrency(variance, CURRENCY, locale)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        {/* ── 4 KPI Cards ── */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {isAr ? "الرصيد الحالي" : "Current Cash"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold tabular-nums tracking-tighter">SAR 450,000</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {isAr ? "معدل الحرق (٣٠ يوم)" : "30-Day Burn Rate"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold tabular-nums tracking-tighter text-destructive">-SAR 145k/mo</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {isAr ? "أدنى رصيد متوقع" : "Projected Low"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold tabular-nums tracking-tighter text-destructive">-SAR 45,000</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{isAr ? "الأسبوع ١٠" : "Week 10"}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <CardTitle className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                {isAr ? "المدرج الزمني النقدي" : "Cash Runway"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold tabular-nums tracking-tighter text-amber-600 dark:text-amber-400">
+                2.4 {isAr ? "شهر" : "Months"}
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* ── Side panel: Scenario Sandbox ── */}
-        <div className="hidden lg:flex flex-col w-80 shrink-0 border-s overflow-y-auto p-4 bg-muted/20">
-          <ScenarioSandbox
-            params={params}
-            setParam={setParam}
-            reset={reset}
-            cashZeroDate={cashZeroDate}
-            isAr={isAr}
-            locale={locale}
-          />
-        </div>
       </div>
     </div>
   );
