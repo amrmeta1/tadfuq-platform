@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SafeCashCard } from "@/components/dashboard/safe-cash-card";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
 import { formatCurrency } from "@/lib/utils";
@@ -248,6 +249,9 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ── AI Cash Ring-Fencing ── */}
+      <SafeCashCard isAr={isAr} currency={curr} />
 
       {/* ── Forecast chart ── */}
       <Card>
