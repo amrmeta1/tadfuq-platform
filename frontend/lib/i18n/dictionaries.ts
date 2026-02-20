@@ -49,6 +49,7 @@ export const dictionaries = {
       budget: "Budget vs Actual",
       hq: "HQ Hub (المركز الرئيسي)",
       cashCollect: "Smart CashCollect",
+      reconciliation: "Bank Reconciliation",
     },
     tenant: {
       switchOrg: "Switch Organization",
@@ -313,6 +314,7 @@ export const dictionaries = {
       budget: "الميزانية مقابل الفعلي",
       hq: "المركز الرئيسي (HQ)",
       cashCollect: "التحصيل الذكي",
+      reconciliation: "المطابقة البنكية",
     },
     tenant: {
       switchOrg: "تبديل المنظمة",
