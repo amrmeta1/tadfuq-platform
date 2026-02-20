@@ -12,7 +12,10 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
-import { Target, Pencil, Check, X, AlertTriangle, TrendingDown, TrendingUp } from "lucide-react";
+import { Target, Pencil, Check, X, AlertTriangle, TrendingDown, TrendingUp, Sparkles } from "lucide-react";
+import { DepartmentRow } from "@/components/budget/DepartmentRow";
+import { DrillDownSheet } from "@/components/budget/DrillDownSheet";
+import { DEPARTMENTS, type Department } from "@/components/budget/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -169,6 +172,13 @@ export default function BudgetPage() {
 
   const periods = getAvailablePeriods();
   const [period, setPeriod] = useState(periods[0]);
+  const [selectedDept, setSelectedDept] = useState<Department | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  const handleDeptClick = (dept: Department) => {
+    setSelectedDept(dept);
+    setSheetOpen(true);
+  };
 
   const { data: lines = [], isLoading } = useBudgetVsActual(currentTenant?.id);
   const updateMutation = useUpdateBudget(currentTenant?.id);
@@ -390,6 +400,84 @@ export default function BudgetPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          AI DEPARTMENTAL HEATMAP SECTION
+      ══════════════════════════════════════════════════════════════════ */}
+
+      {/* Section divider */}
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+          <Sparkles className="h-3 w-3" />
+          {isAr ? "رادار الميزانية بالذكاء الاصطناعي (FY 2026)" : "AI Budget Heatmap (FY 2026)"}
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      {/* AI KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-1 pt-4 px-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              {isAr ? "إجمالي الميزانية المؤسسية" : "Total Corporate Budget"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-2xl font-bold tabular-nums tracking-tighter">SAR 1,380,000</p>
+            <p className="text-xs text-muted-foreground mt-1">{isAr ? "السنة المالية 2026" : "FY 2026"}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-1 pt-4 px-4">
+            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              {isAr ? "إجمالي الفعلي حتى الآن" : "Total Actual YTD"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-2xl font-bold tabular-nums tracking-tighter">SAR 337,000</p>
+            <p className="text-xs text-muted-foreground mt-1">{isAr ? "نهاية فبراير — الربع الأول" : "End of February — Q1"}</p>
+          </CardContent>
+        </Card>
+
+        {/* AI Alert Card */}
+        <div className="bg-destructive/10 border border-destructive/30 text-destructive p-4 rounded-xl flex flex-col justify-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs font-bold uppercase tracking-widest">
+              {isAr ? "تنبيه مستشار AI" : "Mustashar AI Alert"}
+            </span>
+          </div>
+          <p className="text-sm font-medium leading-snug">
+            {isAr
+              ? "التسويق استهلك ١١٥٪ من ميزانيته السنوية. إعادة التخصيص مطلوبة فوراً."
+              : "Marketing has consumed 115% of its annual budget. Immediate reallocation required."}
+          </p>
+        </div>
+      </div>
+
+      {/* Departmental heatmap rows */}
+      <div className="flex flex-col gap-4">
+        {DEPARTMENTS.map((dept) => (
+          <DepartmentRow
+            key={dept.id}
+            dept={dept}
+            isAr={isAr}
+            onClick={handleDeptClick}
+          />
+        ))}
+      </div>
+
+      {/* Drill-down sheet */}
+      <DrillDownSheet
+        dept={selectedDept}
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        isAr={isAr}
+        dir={dir as "ltr" | "rtl"}
+      />
+
     </div>
   );
 }

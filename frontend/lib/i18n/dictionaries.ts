@@ -45,6 +45,7 @@ export const dictionaries = {
       security: "Security",
       waterfall: "Cash Flow",
       fxRadar: "FX Radar",
+      scenarioPlanner: "Scenario Planner",
       budget: "Budget vs Actual",
     },
     tenant: {
@@ -306,6 +307,7 @@ export const dictionaries = {
       security: "الأمان",
       waterfall: "التدفق النقدي",
       fxRadar: "رادار العملات",
+      scenarioPlanner: "مخطط السيناريوهات",
       budget: "الميزانية مقابل الفعلي",
     },
     tenant: {
