@@ -2,20 +2,16 @@
 
 import {
   ComposedChart,
-  Area,
+  Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
+  ResponsiveContainer,
+  ReferenceArea,
+  Legend,
 } from "recharts";
-import {
-  ChartContainer,
-  ChartTooltip,
-  type ChartConfig,
-} from "@/components/ui/chart";
-import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -27,126 +23,104 @@ export interface ForecastDataPoint {
   aiNote?: string | null;
 }
 
-interface MasterForecastChartProps {
-  data: ForecastDataPoint[];
-  isAr?: boolean;
+export interface CashflowMonthPoint {
+  month: string;
+  isCurrent?: boolean;
+  inflow?: number;
+  outflow?: number;
+  inflowFuture?: number;
+  outflowFuture?: number;
+  balance?: number;
+  balanceForecast?: number;
 }
 
-// ── Chart config ──────────────────────────────────────────────────────────────
-
-const chartConfig: ChartConfig = {
-  actual: {
-    label: "Actuals",
-    color: "hsl(var(--primary))",
-  },
-  forecast: {
-    label: "Forecast",
-    color: "hsl(38 92% 50%)",
-  },
-};
+interface MasterForecastChartProps {
+  data: CashflowMonthPoint[];
+  currency: string;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtSAR(n: number | null | undefined): string {
+function fmt(n: number | null | undefined, currency: string): string {
   if (n == null) return "—";
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}SAR ${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}SAR ${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}SAR ${abs.toLocaleString("en-US")}`;
+  if (abs >= 1_000_000) return `${sign}${currency} ${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}${currency} ${(abs / 1_000).toFixed(0)}k`;
+  return `${sign}${currency} ${abs.toLocaleString()}`;
 }
 
 // ── Custom tooltip ────────────────────────────────────────────────────────────
 
-function CustomTooltip({ active, payload, label }: any) {
+function fmtValue(n: number | null | undefined): string {
+  if (n == null) return "—";
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}k`;
+  return `${sign}${abs.toLocaleString()}`;
+}
+
+function ChartTooltip({ active, payload, label, currency }: any) {
   if (!active || !payload?.length) return null;
-
-  const point: ForecastDataPoint | undefined = payload[0]?.payload;
-  const actual = payload.find((p: any) => p.dataKey === "actual")?.value as number | null;
-  const forecast = payload.find((p: any) => p.dataKey === "forecast")?.value as number | null;
-
+  const rows = payload.filter((p: any) => p.value != null && p.value !== 0);
   return (
-    <div className="rounded-xl border border-border bg-popover shadow-lg text-xs min-w-[200px] overflow-hidden">
-      {/* Header */}
-      <div className="px-3 py-2 border-b bg-muted/40">
-        <p className="font-semibold text-foreground">{label}</p>
-      </div>
-
-      {/* Values */}
-      <div className="px-3 py-2 space-y-1.5">
-        {actual != null && (
-          <div className="flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
-              Actuals
-            </span>
-            <span className="tabular-nums font-mono font-semibold text-foreground">
-              {fmtSAR(actual)}
+    <div dir="rtl" className="bg-popover text-popover-foreground border border-border shadow-sm rounded-lg p-3 min-w-[210px]">
+      <p className="font-semibold text-sm mb-2 pb-1.5 border-b border-border">{label}</p>
+      <div className="space-y-1.5">
+        {rows.map((p: any) => (
+          <div key={p.dataKey} className="flex justify-between items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+              <span className="text-xs text-muted-foreground">{p.name}</span>
+            </div>
+            <span dir="ltr" className="font-mono text-xs font-medium tabular-nums" style={{ color: p.color }} suppressHydrationWarning>
+              {fmtValue(p.value)} {currency}
             </span>
           </div>
-        )}
-        {forecast != null && (
-          <div className="flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5 text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
-              Forecast
-            </span>
-            <span className={cn(
-              "tabular-nums font-mono font-semibold",
-              forecast < 0 ? "text-destructive" : "text-foreground"
-            )}>
-              {fmtSAR(forecast)}
-            </span>
-          </div>
-        )}
+        ))}
       </div>
-
-      {/* AI Anomaly callout */}
-      {point?.isAnomaly && point.aiNote && (
-        <div className="mx-2 mb-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 shadow-[0_0_12px_-4px_hsl(0_72%_51%/0.4)]">
-          <p className="text-destructive font-medium leading-snug">{point.aiNote}</p>
-        </div>
-      )}
     </div>
   );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function MasterForecastChart({ data, isAr = false }: MasterForecastChartProps) {
+export function MasterForecastChart({ data, currency }: MasterForecastChartProps) {
   return (
-    <ChartContainer config={chartConfig} className="h-[340px] w-full">
-      <ComposedChart data={data} margin={{ top: 10, right: 16, left: 8, bottom: 0 }}>
+    <ResponsiveContainer width="100%" height={350}>
+      <ComposedChart data={data} margin={{ top: 8, right: 0, left: 16, bottom: 0 }} barGap={2}>
         <defs>
-          {/* Actual gradient — primary color */}
-          <linearGradient id="gradActual" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
-          </linearGradient>
-          {/* Forecast gradient — amber */}
-          <linearGradient id="gradForecast" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="hsl(38 92% 50%)" stopOpacity={0.25} />
-            <stop offset="95%" stopColor="hsl(38 92% 50%)" stopOpacity={0.02} />
-          </linearGradient>
+          {/* Diagonal stripe — green (future inflow) */}
+          <pattern id="stripeGreen" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill="#34d39922" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#34d399" strokeWidth="2.5" />
+          </pattern>
+          {/* Diagonal stripe — rose (future outflow) */}
+          <pattern id="stripeRed" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+            <rect width="6" height="6" fill="#fb718522" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#fb7185" strokeWidth="2.5" />
+          </pattern>
         </defs>
 
-        <CartesianGrid
-          strokeDasharray="3 3"
-          vertical={false}
-          stroke="hsl(240 5.9% 90% / 0.4)"
-        />
+        {/* Current month highlight */}
+        <ReferenceArea x1="أبريل" x2="أبريل" fill="#3b82f6" fillOpacity={0.07} />
+
+        <CartesianGrid stroke="currentColor" opacity={0.05} vertical={false} />
 
         <XAxis
-          dataKey="week"
+          dataKey="month"
+          reversed={true}
           tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
+          orientation="right"
+          width={120}
           tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
           axisLine={false}
           tickLine={false}
-          width={64}
           tickFormatter={(v: number) => {
             const abs = Math.abs(v);
             const sign = v < 0 ? "-" : "";
@@ -156,61 +130,47 @@ export function MasterForecastChart({ data, isAr = false }: MasterForecastChartP
           }}
         />
 
-        <ChartTooltip content={<CustomTooltip />} />
+        <Tooltip content={<ChartTooltip currency={currency} />} />
 
-        {/* Today vertical marker */}
-        <ReferenceLine
-          x="Week 7"
-          stroke="hsl(240 3.8% 46.1%)"
-          strokeDasharray="4 4"
-          strokeWidth={1.5}
-          label={{
-            value: isAr ? "اليوم" : "Today",
-            position: "insideTopRight",
-            fontSize: 10,
-            fill: "hsl(240 3.8% 46.1%)",
-          }}
+        <Legend
+          iconType="circle"
+          iconSize={7}
+          wrapperStyle={{ fontSize: 11, paddingTop: 12 }}
         />
 
-        {/* Zero cash danger line */}
-        <ReferenceLine
-          y={0}
-          stroke="hsl(0 72% 51%)"
-          strokeDasharray="4 4"
-          strokeWidth={1.5}
-          label={{
-            value: isAr ? "خط الصفر" : "Zero Cash",
-            position: "insideTopRight",
-            fontSize: 10,
-            fill: "hsl(0 72% 51%)",
-          }}
-        />
+        {/* Past bars — solid */}
+        <Bar dataKey="inflow"  name="إيرادات فعلية"  fill="#34d399" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="outflow" name="مصروفات فعلية" fill="#fb7185" radius={[3, 3, 0, 0]} maxBarSize={32} />
 
-        {/* Actuals area — solid stroke */}
-        <Area
+        {/* Future bars — striped */}
+        <Bar dataKey="inflowFuture"  name="إيرادات متوقعة"  fill="url(#stripeGreen)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="outflowFuture" name="مصروفات متوقعة" fill="url(#stripeRed)"   radius={[3, 3, 0, 0]} maxBarSize={32} />
+
+        {/* Past balance — solid blue */}
+        <Line
           type="monotone"
-          dataKey="actual"
-          stroke="hsl(var(--primary))"
-          strokeWidth={2}
-          fill="url(#gradActual)"
-          dot={false}
-          activeDot={{ r: 4, strokeWidth: 0, fill: "hsl(var(--primary))" }}
+          dataKey="balance"
+          name="الرصيد الفعلي"
+          stroke="#818cf8"
+          strokeWidth={2.5}
+          dot={{ r: 3.5, fill: "var(--background)", stroke: "#818cf8", strokeWidth: 2 }}
+          activeDot={{ r: 5, strokeWidth: 0 }}
           connectNulls={false}
         />
 
-        {/* Forecast area — dashed stroke */}
-        <Area
+        {/* Future balance — dashed indigo */}
+        <Line
           type="monotone"
-          dataKey="forecast"
-          stroke="hsl(38 92% 50%)"
-          strokeWidth={2}
+          dataKey="balanceForecast"
+          name="الرصيد المتوقع"
+          stroke="#818cf8"
+          strokeWidth={2.5}
           strokeDasharray="5 5"
-          fill="url(#gradForecast)"
-          dot={false}
-          activeDot={{ r: 4, strokeWidth: 0, fill: "hsl(38 92% 50%)" }}
+          dot={{ r: 3.5, fill: "var(--background)", stroke: "#818cf8", strokeWidth: 2 }}
+          activeDot={{ r: 5, strokeWidth: 0 }}
           connectNulls={false}
         />
       </ComposedChart>
-    </ChartContainer>
+    </ResponsiveContainer>
   );
 }

@@ -10,6 +10,7 @@ import { useTenant } from "@/lib/hooks/use-tenant";
 import { useI18n } from "@/lib/i18n/context";
 import { listTenants } from "@/lib/api/tenant-api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MustasharCopilot } from "@/components/ai/MustasharCopilot";
 
 function AppShellSkeleton() {
   return (
@@ -108,6 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
+      <MustasharCopilot />
     </div>
   );
 }

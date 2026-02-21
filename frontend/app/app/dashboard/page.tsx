@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import dynamic from "next/dynamic";
 import {
-  DollarSign,
   TrendingUp,
   TrendingDown,
-  Bell,
-  Sparkles,
-  BellOff,
   Download,
+  Calendar,
+  Building2,
+  Sparkles,
+  Clock,
   ArrowUpRight,
   ArrowDownRight,
-  Minus,
+  Banknote,
+  MessageCircle,
+  ArrowLeftRight,
 } from "lucide-react";
 import {
   Card,
@@ -20,342 +22,237 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { SafeCashCard } from "@/components/dashboard/safe-cash-card";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
-import { useTenant } from "@/lib/hooks/use-tenant";
 import { useCompany } from "@/contexts/CompanyContext";
-import { formatCurrency } from "@/lib/utils";
-import { cn } from "@/lib/utils";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 
-const placeholderForecast = [
-  { day: "Day 1",  balance: 125000 },
-  { day: "Day 5",  balance: 118000 },
-  { day: "Day 10", balance: 132000 },
-  { day: "Day 15", balance: 128000 },
-  { day: "Day 20", balance: 145000 },
-  { day: "Day 25", balance: 139000 },
-  { day: "Day 30", balance: 152340 },
+const CashFlowChart = dynamic(
+  () => import("@/components/dashboard/CashFlowChart"),
+  { ssr: false, loading: () => <Skeleton className="h-[430px] w-full rounded-xl" /> }
+);
+
+// ── Mock data ──────────────────────────────────────────────────────────────────
+
+const BANK_ACCOUNTS = [
+  { name: "QNB - حساب الشركات",   balance: 125400, share: 0.58 },
+  { name: "CBQ - حساب الرواتب",   balance: 54200,  share: 0.25 },
+  { name: "مصرف الريان - ودائع",  balance: 38740,  share: 0.17 },
 ];
 
-function TrendBadge({
-  pct,
-  positive,
-  isAr,
-}: {
-  pct: string;
-  positive: boolean | null;
-  isAr: boolean;
-}) {
-  const neutral = positive === null;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium",
-        neutral
-          ? "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
-          : positive
-          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
-          : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400"
-      )}
-    >
-      {neutral ? (
-        <Minus className="h-3 w-3" />
-      ) : positive ? (
-        <ArrowUpRight className="h-3 w-3" />
-      ) : (
-        <ArrowDownRight className="h-3 w-3" />
-      )}
-      {pct}
-      <span className="font-normal opacity-70">
-        {isAr ? " من الشهر الماضي" : " vs last mo."}
-      </span>
-    </span>
-  );
-}
+const TOTAL_BANK = 218340;
 
-function EmptyState({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-3 py-8 text-center">
-      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-muted/60">
-        <Icon className="h-5 w-5 text-muted-foreground" />
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-function ChartTooltip({ active, payload, label, locale, currency }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs">
-      <p className="font-medium text-foreground mb-1">{label}</p>
-      <p className="text-muted-foreground">
-        {formatCurrency(payload[0].value, currency, locale)}
-      </p>
-    </div>
-  );
-}
-
-const DATE_RANGES = ["7d", "30d", "90d", "12m"] as const;
-type DateRange = (typeof DATE_RANGES)[number];
 
 export default function DashboardPage() {
-  const { t, locale, dir } = useI18n();
-  const { currentTenant } = useTenant();
+  const { locale, dir } = useI18n();
   const { profile } = useCompany();
-  const isAr = locale === "ar";
   const curr = profile.currency || "SAR";
-  const taxAuth = profile.taxAuthority || "ZATCA";
-  const loc = locale === "ar" ? "ar-SA" : "en-SA";
-
-  const [dateRange, setDateRange] = useState<DateRange>("30d");
-
-  const RANGE_LABELS: Record<DateRange, string> = {
-    "7d":  isAr ? "٧ أيام" : "Last 7 days",
-    "30d": isAr ? "٣٠ يومًا" : "Last 30 days",
-    "90d": isAr ? "٩٠ يومًا" : "Last 90 days",
-    "12m": isAr ? "١٢ شهرًا" : "Last 12 months",
-  };
+  const companyName = profile.companyName || "شركتك";
 
   return (
     <div dir={dir} className="flex flex-col gap-5 p-5 md:p-6 overflow-y-auto h-full">
 
-      {/* ── Top action bar ── */}
-      <div className="flex items-center justify-between gap-3">
+      {/* ══ HEADER ══ */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <p className="text-xs text-muted-foreground">
-            {currentTenant?.name ?? ""}
-          </p>
+          <h1 suppressHydrationWarning className="text-lg font-semibold tracking-tight">
+            نظرة عامة على سيولة {companyName}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">آخر 6 أشهر · بيانات تجريبية</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={dateRange} onValueChange={(v) => setDateRange(v as DateRange)}>
-            <SelectTrigger className="h-8 w-[140px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DATE_RANGES.map((r) => (
-                <SelectItem key={r} value={r} className="text-xs">
-                  {RANGE_LABELS[r]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+            <Calendar className="h-3.5 w-3.5" />
+            آخر 6 أشهر
+          </Button>
           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
             <Download className="h-3.5 w-3.5" />
-            {isAr ? "تصدير" : "Export"}
+            تصدير تقرير
           </Button>
         </div>
       </div>
 
-      {/* ── KPI cards ── */}
-      <div className="grid gap-3 md:grid-cols-3">
-        {/* Total Balance */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t.dashboard.totalBalance}
-            </CardTitle>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
-              <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex items-baseline gap-1.5">
-              <span suppressHydrationWarning className="text-sm font-normal text-muted-foreground">{curr}</span>
-              <span className="text-2xl font-semibold tracking-tight tabular-nums">
-                152,340
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">{t.dashboard.cashPosition}</p>
-            <div className="mt-2">
-              <TrendBadge pct="+2.1%" positive={true} isAr={isAr} />
-            </div>
-          </CardContent>
-        </Card>
+      {/* ══ SPLIT VIEW ══ */}
+      <div className="flex flex-col xl:flex-row gap-6 w-full max-w-[1600px] mx-auto">
 
-        {/* Income */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t.dashboard.income}
-            </CardTitle>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 dark:bg-emerald-950/40">
-              <TrendingUp className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex items-baseline gap-1.5">
-              <span suppressHydrationWarning className="text-sm font-normal text-muted-foreground">{curr}</span>
-              <span className="text-2xl font-semibold tracking-tight tabular-nums text-emerald-600 dark:text-emerald-500">
-                48,200
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isAr ? "هذا الشهر" : "This month"}
-            </p>
-            <div className="mt-2">
-              <TrendBadge pct="+5.2%" positive={true} isAr={isAr} />
-            </div>
-          </CardContent>
-        </Card>
+        {/* ── RIGHT PANE: KPI Sidebar ── */}
+        <div className="w-full xl:w-[280px] shrink-0 flex flex-col gap-3">
 
-        {/* Expenses */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
-            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {t.dashboard.expenses}
-            </CardTitle>
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-rose-50 dark:bg-rose-950/40">
-              <TrendingDown className="h-3.5 w-3.5 text-rose-600 dark:text-rose-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <div className="flex items-baseline gap-1.5">
-              <span suppressHydrationWarning className="text-sm font-normal text-muted-foreground">{curr}</span>
-              <span className="text-2xl font-semibold tracking-tight tabular-nums text-rose-600 dark:text-rose-500">
-                31,850
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isAr ? "هذا الشهر" : "This month"}
-            </p>
-            <div className="mt-2">
-              <TrendBadge pct="-3.1%" positive={false} isAr={isAr} />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          {/* الرصيد الإجمالي */}
+          <Card className="shadow-sm border-border/50 overflow-hidden bg-gradient-to-br from-blue-50/50 to-transparent dark:from-blue-950/20">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-zinc-400 shrink-0" />
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">الرصيد الإجمالي</p>
+              </div>
+              <p suppressHydrationWarning className="text-2xl font-bold tabular-nums tracking-tight leading-none text-foreground">
+                {curr} {TOTAL_BANK.toLocaleString()}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">موزعة على 3 حسابات بنكية</p>
+              <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
+                <ArrowUpRight className="h-3 w-3" />+2.1% من الشهر الماضي
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* ── AI Cash Ring-Fencing ── */}
-      <SafeCashCard isAr={isAr} currency={curr} taxAuthority={taxAuth} />
+          {/* إجمالي الإيرادات */}
+          <Card className="shadow-sm border-border/50 overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">إجمالي الإيرادات</p>
+              </div>
+              <p suppressHydrationWarning className="text-2xl font-bold tabular-nums tracking-tight leading-none text-foreground">
+                {curr} 112,000
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">هذا الشهر</p>
+              <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
+                <ArrowUpRight className="h-3 w-3" />+12% عن الشهر الماضي
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* ── Forecast chart ── */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
-          <div>
-            <CardTitle className="text-sm font-semibold">{t.dashboard.forecast}</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {isAr ? "توقع الرصيد للـ ٣٠ يومًا القادمة" : "30-day projected cash balance"}
-            </p>
+          {/* إجمالي المصروفات */}
+          <Card className="shadow-sm border-border/50 overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">إجمالي المصروفات</p>
+              </div>
+              <p suppressHydrationWarning className="text-2xl font-bold tabular-nums tracking-tight leading-none text-foreground">
+                {curr} 79,000
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">أكبر حرق: رواتب الموظفين</p>
+              <div className="text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
+                <ArrowDownRight className="h-3 w-3" />-3.1% من الشهر الماضي
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* المدرج الزمني */}
+          <Card className="shadow-sm border-border/50 overflow-hidden bg-muted/20">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">المدرج الزمني</p>
+              </div>
+              <p className="text-2xl font-bold tabular-nums tracking-tight leading-none text-foreground">
+                8.3 أشهر
+              </p>
+              <p className="text-xs text-muted-foreground mt-1.5">بناءً على معدل الحرق الحالي</p>
+              <div className="text-indigo-500 bg-indigo-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
+                <ArrowUpRight className="h-3 w-3" />مستقر
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
+
+        {/* ── LEFT PANE: Chart + Bottom Grid ── */}
+        <div className="flex-1 min-w-0 flex flex-col gap-6">
+
+          {/* Chart */}
+          <Card className="shadow-sm border-border/50 p-1">
+            <CashFlowChart currency={curr} />
+          </Card>
+
+          {/* Bottom 2-col */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* Bank Accounts */}
+            <Card className="shadow-sm border-border/50">
+              <CardHeader className="pb-2 pt-5 px-5">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-semibold">أرصدة الحسابات</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="px-5 pb-5 space-y-4">
+                {BANK_ACCOUNTS.map((acc) => (
+                  <div key={acc.name}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-muted shrink-0">
+                          <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                        <span className="text-sm font-medium">{acc.name}</span>
+                      </div>
+                      <span suppressHydrationWarning className="text-sm font-semibold tabular-nums ms-auto ps-4">
+                        {curr} {acc.balance.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-indigo-500 transition-all"
+                        style={{ width: `${(acc.share * 100).toFixed(0)}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">{(acc.share * 100).toFixed(0)}% من الإجمالي</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* AI Agents */}
+            <Card className="bg-card border-indigo-100 dark:border-indigo-900/50 shadow-sm relative overflow-hidden">
+              <CardHeader className="pb-2 pt-5 px-5">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-muted-foreground" />
+                  <CardTitle className="text-sm font-semibold">وكلاء الذكاء الاصطناعي · AI Agents</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="px-5 pb-5 space-y-3">
+
+                {/* 👁️ الوكيل رَقيب */}
+                <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">👁️</span>
+                    <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">الوكيل رَقيب · Monitoring Agent</p>
+                  </div>
+                  <p className="text-sm text-foreground leading-snug">
+                    يوجد فاتورة متأخرة من شركة الميرة. هل أرسل مطالبة بالواتساب؟
+                  </p>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400">
+                    <MessageCircle className="h-3 w-3" />
+                    إرسال واتساب
+                  </Button>
+                </div>
+
+                {/* 🔮 الوكيل مُتوقِّع */}
+                <div className="rounded-lg border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-950/20 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🔮</span>
+                    <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">الوكيل مُتوقِّع · Forecasting Agent</p>
+                  </div>
+                  <p className="text-sm text-foreground leading-snug">
+                    أتوقع عجزاً نقدياً بعد 14 يوماً بسبب تعارض الرواتب مع دفعة الموردين.
+                  </p>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400">
+                    <TrendingDown className="h-3 w-3" />
+                    عرض التوقع
+                  </Button>
+                </div>
+
+                {/* 🧠 الوكيل مُستشار */}
+                <div className="rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🧠</span>
+                    <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">الوكيل مُستشار · Decision Agent</p>
+                  </div>
+                  <p className="text-sm text-foreground leading-snug">
+                    أنصح بتأجيل سداد فاتورة Ooredoo لتجنب العجز.
+                  </p>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400">
+                    <ArrowLeftRight className="h-3 w-3" />
+                    تأجيل الفاتورة
+                  </Button>
+                </div>
+
+              </CardContent>
+            </Card>
+
           </div>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <div className="h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={placeholderForecast}
-                margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="dashBalGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="hsl(243 75% 59%)" stopOpacity={0.18} />
-                    <stop offset="95%" stopColor="hsl(243 75% 59%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="hsl(240 5.9% 90%)"
-                />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={44}
-                  tickFormatter={(v: number) =>
-                    v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
-                  }
-                />
-                <Tooltip
-                  content={
-                    <ChartTooltip locale={loc} currency={curr} />
-                  }
-                />
-                <Area
-                  type="monotone"
-                  dataKey="balance"
-                  stroke="hsl(243 75% 59%)"
-                  strokeWidth={2}
-                  fill="url(#dashBalGrad)"
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 0 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Alerts + Daily Brief ── */}
-      <div className="grid gap-3 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-2 pb-2 pt-4 px-4">
-            <Bell className="h-3.5 w-3.5 text-muted-foreground" />
-            <CardTitle className="text-sm font-semibold">{t.dashboard.alerts}</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <EmptyState
-              icon={BellOff}
-              title={isAr ? "لا توجد تنبيهات" : "All clear"}
-              description={
-                isAr
-                  ? "لا توجد تنبيهات نشطة في الوقت الحالي."
-                  : "No active alerts at this time. You're on track."
-              }
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-2 pb-2 pt-4 px-4">
-            <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-            <CardTitle className="text-sm font-semibold">{t.dashboard.dailyBrief}</CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            <EmptyState
-              icon={Sparkles}
-              title={isAr ? "ملخصك اليومي" : "Your daily brief"}
-              description={
-                isAr
-                  ? "سيظهر ملخص الذكاء الاصطناعي هنا بمجرد استيراد المعاملات."
-                  : "Your AI brief will appear here once transactions are imported."
-              }
-            />
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </div>
   );

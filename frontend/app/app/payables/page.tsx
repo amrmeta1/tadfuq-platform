@@ -1,270 +1,257 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Sparkles, CheckCircle2, DollarSign, PiggyBank } from "lucide-react";
+import { useState } from "react";
+import { Search, ChevronDown, MessageCircle, Sparkles, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/context";
-import { usePayables, Payable, BatchGroup } from "@/lib/hooks/usePayables";
-import { PayableCard } from "@/components/payables/PayableCard";
+import { useCompany } from "@/contexts/CompanyContext";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Mock data ──────────────────────────────────────────────────────────────────
 
-const TOTAL_UNPAID = 245_000;
+interface Invoice {
+  id: string;
+  vendor: string;
+  invoice: string;
+  due: string;
+  amount: number;
+  priority: "urgent" | "delay" | "discount";
+}
 
-const GROUP_META: Record<
-  BatchGroup,
-  { emoji: string; label_en: string; label_ar: string; borderColor: string }
-> = {
-  early_pay: {
-    emoji: "🔥",
-    label_en: "Strategic Early Pay (Yields 2% Discount)",
-    label_ar: "دفع مبكر استراتيجي (يحقق خصم ٢٪)",
-    borderColor: "border-emerald-500/30",
-  },
-  standard: {
-    emoji: "⚡",
-    label_en: "Standard Batch (Just-in-Time)",
-    label_ar: "دفعة قياسية (في الوقت المناسب)",
-    borderColor: "border-amber-500/30",
-  },
-  smart_delay: {
-    emoji: "🛡️",
-    label_en: "Smart Delay (Maximize Cash Retention)",
-    label_ar: "تأجيل ذكي (تعظيم الاحتفاظ بالسيولة)",
-    borderColor: "border-violet-500/30",
-  },
+const INVOICES: Invoice[] = [
+  { id: "1", vendor: "Ooredoo",          invoice: "INV-2026-089", due: "غداً",          amount: 45_000,  priority: "urgent"   },
+  { id: "2", vendor: "Al Mana Motors",   invoice: "INV-2026-074", due: "15 أكتوبر",    amount: 128_000, priority: "delay"    },
+  { id: "3", vendor: "Microsoft Ireland",invoice: "INV-2026-101", due: "20 أكتوبر",    amount: 32_500,  priority: "discount" },
+  { id: "4", vendor: "Aramex",           invoice: "INV-2026-055", due: "22 أكتوبر",    amount: 18_750,  priority: "delay"    },
+  { id: "5", vendor: "STC Business",     invoice: "INV-2026-112", due: "28 أكتوبر",    amount: 67_200,  priority: "urgent"   },
+  { id: "6", vendor: "Oracle Cloud",     invoice: "INV-2026-098", due: "1 نوفمبر",     amount: 215_000, priority: "discount" },
+  { id: "7", vendor: "Zain Business",    invoice: "INV-2026-063", due: "5 نوفمبر",     amount: 41_050,  priority: "delay"    },
+];
+
+const PRIORITY_META = {
+  urgent:   { dot: "🔴", label: "عاجل جداً",    color: "text-destructive"                          },
+  delay:    { dot: "🟡", label: "تأجيل ممكن",   color: "text-orange-500 dark:text-orange-400"      },
+  discount: { dot: "🟢", label: "خصم متاح",     color: "text-emerald-600 dark:text-emerald-400"    },
 };
 
-const GROUP_ORDER: BatchGroup[] = ["early_pay", "standard", "smart_delay"];
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function fmtAmount(n: number): string {
-  return `SAR ${n.toLocaleString("en-US")}`;
+function fmt(n: number, curr: string): string {
+  return `${n.toLocaleString("en-US")} ${curr}`;
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function GroupHeader({ group, isAr }: { group: BatchGroup; isAr: boolean }) {
-  const meta = GROUP_META[group];
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-      className={`flex items-center gap-2 px-4 py-2.5 border-b-2 ${meta.borderColor} bg-muted/30`}
-    >
-      <span className="text-base">{meta.emoji}</span>
-      <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-        {isAr ? meta.label_ar : meta.label_en}
-      </span>
-    </motion.div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function PayablesPage() {
-  const { locale, dir } = useI18n();
-  const isAr = locale === "ar";
+  const { dir } = useI18n();
+  const { profile } = useCompany();
+  const curr = profile.currency || "SAR";
+  const [selectedId, setSelectedId] = useState<string>("1");
 
-  const {
-    payables,
-    status,
-    optimizationResult,
-    terminalLine,
-    runOptimization,
-  } = usePayables();
-
-  // Sort chaotic view by due date ascending
-  const chaoticList = [...payables].sort(
-    (a, b) =>
-      new Date(a.originalDueDate).getTime() -
-      new Date(b.originalDueDate).getTime()
-  );
-
-  // Group optimized payables
-  const grouped = GROUP_ORDER.reduce<Record<BatchGroup, Payable[]>>(
-    (acc, g) => {
-      acc[g] = payables.filter((p) => p.batchGroup === g);
-      return acc;
-    },
-    { early_pay: [], standard: [], smart_delay: [] }
-  );
+  const selected = INVOICES.find((inv) => inv.id === selectedId) ?? INVOICES[0];
 
   return (
-    <div dir={dir} className="flex flex-col h-full overflow-y-auto bg-background">
-      <div className="max-w-3xl w-full mx-auto px-4 py-8 space-y-6">
+    <div
+      dir={dir}
+      className="flex flex-col lg:flex-row h-[calc(100vh-6rem)] gap-6 w-full max-w-[1800px] mx-auto overflow-hidden p-5 md:p-6"
+    >
 
-        {/* ── Page title ── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          RIGHT PANE — Master Invoice List
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex-[3] flex flex-col gap-4 overflow-y-auto min-w-0 pb-4 pe-2">
+
+        {/* A. Header */}
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {isAr ? "إدارة المدفوعات الذكية" : "AI Smart Payable Batching"}
+          <h1 className="text-2xl font-bold tracking-tight">
+            المدفوعات الذكية{" "}
+            <span className="text-muted-foreground font-normal text-lg">(Smart Payables)</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {isAr
-              ? "يُعيد مستشار AI ترتيب فواتيرك لتعظيم رأس المال العامل."
-              : "Mustashar AI re-organizes your bills to maximize working capital."}
-          </p>
+
+          {/* 3 KPI chips */}
+          <div className="flex flex-wrap gap-3 mt-4">
+            <div className="rounded-lg border bg-card p-3 min-w-[160px]">
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">إجمالي المستحق</p>
+              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>
+                {fmt(1_240_500, curr)}
+              </p>
+              <div className="text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">↘ مستحق الدفع</div>
+            </div>
+            <div className="rounded-lg border bg-card p-3 min-w-[160px]">
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">مستحق هذا الأسبوع</p>
+              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>
+                {fmt(320_000, curr)}
+              </p>
+              <div className="text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">↗ هذا الأسبوع</div>
+            </div>
+            <div className="rounded-lg border bg-card p-3 min-w-[160px]">
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">وفر محتمل (خصم مبكر)</p>
+              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>
+                {fmt(12_500, curr)}
+              </p>
+              <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">↗ وفر محتمل</div>
+            </div>
+          </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════════════════
-            ACTION HEADER — 3 states
-        ══════════════════════════════════════════════════════════════════ */}
-        <AnimatePresence mode="wait">
+        {/* B. Invoice list card */}
+        <Card className="flex-1 overflow-hidden flex flex-col shadow-sm border-border/50">
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 p-3 border-b shrink-0">
+            <div className="relative flex-1">
+              <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input placeholder="بحث في الفواتير..." className="h-8 ps-8 text-xs" />
+            </div>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0">
+              حالة الفاتورة <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0">
+              ترتيب حسب <ChevronDown className="h-3 w-3 opacity-60" />
+            </Button>
+          </div>
 
-          {/* ── CHAOTIC ── */}
-          {status === "chaotic" && (
-            <motion.div
-              key="chaotic-header"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4"
-            >
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-widest font-medium mb-0.5">
-                  {isAr ? "إجمالي الفواتير غير المدفوعة" : "Total Unpaid Bills"}
-                </p>
-                <p className="text-2xl font-bold tabular-nums tracking-tighter">
-                  {fmtAmount(TOTAL_UNPAID)}
-                </p>
-              </div>
-              <div className="ms-auto">
-                <Button
-                  size="lg"
-                  className="gap-2 shadow-[0_0_24px_-6px_hsl(var(--primary)/0.6)] hover:shadow-[0_0_32px_-4px_hsl(var(--primary)/0.7)] transition-shadow"
-                  onClick={runOptimization}
+          {/* Scrollable invoice rows */}
+          <div className="flex-1 overflow-y-auto">
+            {INVOICES.map((inv) => {
+              const isSelected = inv.id === selectedId;
+              const meta = PRIORITY_META[inv.priority];
+              return (
+                <div
+                  key={inv.id}
+                  onClick={() => setSelectedId(inv.id)}
+                  className={`p-4 border-b cursor-pointer flex justify-between items-center transition-colors gap-4 ${
+                    isSelected
+                      ? "bg-blue-500/10 border-s-4 border-s-blue-500"
+                      : "hover:bg-muted/50 border-s-4 border-s-transparent"
+                  }`}
                 >
-                  <Sparkles className="h-4 w-4" />
-                  {isAr ? "✨ تشغيل تحسين رأس المال بالذكاء الاصطناعي" : "✨ Run AI Capital Optimization"}
-                </Button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── OPTIMIZING ── */}
-          {status === "optimizing" && (
-            <motion.div
-              key="optimizing-header"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-4"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <Loader2 className="h-5 w-5 animate-spin text-primary shrink-0" />
-                <motion.p
-                  key={terminalLine}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.25 }}
-                  className="text-sm font-mono text-muted-foreground truncate"
-                >
-                  {terminalLine}
-                </motion.p>
-              </div>
-              <div className="ms-auto">
-                <Button size="lg" disabled className="gap-2 opacity-50">
-                  <Sparkles className="h-4 w-4" />
-                  {isAr ? "جارٍ التحليل…" : "Analyzing…"}
-                </Button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── OPTIMIZED ── */}
-          {status === "optimized" && optimizationResult && (
-            <motion.div
-              key="optimized-header"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-              className="rounded-xl border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 p-4"
-            >
-              <div className="flex flex-wrap items-start gap-4">
-                {/* Metrics */}
-                <div className="flex flex-wrap gap-6 flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <PiggyBank className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
-                        {isAr ? "سيولة محتفظ بها (تأجيل ١٤ يومًا)" : "Cash Preserved (Delayed 14 days)"}
-                      </p>
-                      <p className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400 tracking-tighter">
-                        {fmtAmount(optimizationResult.cashPreserved)}
-                      </p>
+                  {/* Right side (RTL start) */}
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                        inv.priority === "urgent"
+                          ? "border-destructive/40 bg-destructive/5 text-destructive"
+                          : inv.priority === "delay"
+                          ? "border-orange-400/40 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400"
+                          : "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
+                      }`}>
+                        {meta.dot} {meta.label}
+                      </span>
                     </div>
+                    <p className="text-sm font-semibold truncate">{inv.vendor}</p>
+                    <p className="text-[11px] text-muted-foreground">{inv.invoice} · تستحق في {inv.due}</p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700 dark:text-emerald-500">
-                        {isAr ? "خصومات محققة" : "Discounts Captured"}
-                      </p>
-                      <p className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400 tracking-tighter">
-                        {fmtAmount(optimizationResult.discountsCaptured)}
-                      </p>
-                    </div>
-                  </div>
+                  {/* Left side (RTL end) */}
+                  <p className="text-sm font-bold tabular-nums shrink-0" suppressHydrationWarning>
+                    {fmt(inv.amount, curr)}
+                  </p>
                 </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
 
-                {/* Approve button */}
-                <Button
-                  size="sm"
-                  className="ms-auto gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-[0_0_20px_-5px_rgba(16,185,129,0.5)]"
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  {isAr ? "اعتماد دفعات الذكاء الاصطناعي" : "Approve AI Payment Batches"}
-                </Button>
-              </div>
-            </motion.div>
+      {/* ══════════════════════════════════════════════════════════════════════
+          LEFT PANE — Invoice Detail + AI Copilot
+      ══════════════════════════════════════════════════════════════════════ */}
+      <div className="flex-[2] flex flex-col gap-4 border-s border-border/50 ps-6 overflow-y-auto min-w-0 pb-4">
+
+        {/* A. Invoice context card */}
+        <Card className="p-5 shadow-sm border-border/50 shrink-0">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">
+            فاتورة #{selected.invoice} / {selected.vendor}
+          </p>
+          <p className="text-3xl font-bold tabular-nums mt-2" suppressHydrationWarning>
+            {selected.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
+            <span className="text-xl font-semibold text-muted-foreground">{curr}</span>
+          </p>
+
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+              selected.priority === "urgent"
+                ? "bg-destructive/10 text-destructive"
+                : selected.priority === "delay"
+                ? "bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400"
+                : "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
+            }`}>
+              <Clock className="h-3 w-3" />
+              تستحق في {selected.due}
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+            <div>
+              <p className="font-medium text-foreground">تاريخ الفاتورة</p>
+              <p>1 أكتوبر 2026</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">شروط الدفع</p>
+              <p>Net 30</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">الحساب</p>
+              <p>QNB — الجاري</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">العملة</p>
+              <p suppressHydrationWarning>{curr}</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* B. Mustashar AI Copilot card */}
+        <Card className="flex-1 p-6 bg-indigo-900/10 border-indigo-500/20 shadow-sm flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🧠</span>
+            <div>
+              <p className="text-sm font-bold">تحليل الوكيل مُستشار</p>
+              <p className="text-[10px] text-muted-foreground">Mustashar AI Analysis</p>
+            </div>
+            <span className="ms-auto inline-flex items-center gap-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-semibold px-2 py-0.5">
+              <Sparkles className="h-2.5 w-2.5" />
+              AI
+            </span>
+          </div>
+
+          <div className="rounded-lg bg-white/60 dark:bg-white/5 border border-blue-100 dark:border-blue-900/50 p-4">
+            <p className="text-sm text-foreground leading-relaxed">
+              سداد هذه الفاتورة غداً سيؤدي إلى انخفاض الرصيد تحت الحد الآمن في حساب QNB.
+              نظراً لتاريخك الجيد مع <strong>{selected.vendor}</strong>، أرجح تأجيل الدفع
+              لمدة 14 يوماً بدون غرامات لتجنب كسر السيولة.
+            </p>
+          </div>
+
+          {selected.priority === "urgent" && (
+            <div className="flex items-start gap-2 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              <p className="text-xs text-destructive leading-relaxed">
+                تحذير: السداد الفوري سيخفض الرصيد إلى ما دون الحد الأدنى المطلوب (50,000 {curr}).
+              </p>
+            </div>
           )}
 
-        </AnimatePresence>
-
-        {/* ══════════════════════════════════════════════════════════════════
-            PAYABLE LIST — layout-animated cards
-        ══════════════════════════════════════════════════════════════════ */}
-        <div className="rounded-xl border border-border overflow-hidden">
-
-          <AnimatePresence>
-            {status !== "optimized" ? (
-              /* ── Chaotic / Optimizing: single flat list ── */
-              <motion.div key="flat-list" layout>
-                {chaoticList.map((p) => (
-                  <PayableCard
-                    key={p.id}
-                    payable={p}
-                    isAr={isAr}
-                    isOptimized={false}
-                  />
-                ))}
-              </motion.div>
-            ) : (
-              /* ── Optimized: grouped sections ── */
-              <motion.div key="grouped-list" layout>
-                {GROUP_ORDER.filter((g) => grouped[g].length > 0).map((g) => (
-                  <div key={g}>
-                    <GroupHeader group={g} isAr={isAr} />
-                    {grouped[g].map((p) => (
-                      <PayableCard
-                        key={p.id}
-                        payable={p}
-                        isAr={isAr}
-                        isOptimized
-                      />
-                    ))}
-                  </div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-        </div>
-
+          <div className="flex flex-col gap-2 mt-auto">
+            <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2" size="sm">
+              <Clock className="h-3.5 w-3.5" />
+              موافق، تأجيل السداد 14 يوم (Delay 14 Days)
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full border-emerald-500 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-2"
+              size="sm"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              سداد الآن للاستفادة من خصم 2% (Pay Now - 2% Off)
+            </Button>
+            <Button variant="outline" className="w-full gap-2" size="sm">
+              <MessageCircle className="h-3.5 w-3.5" />
+              تواصل مع المورد عبر واتساب (WhatsApp Vendor)
+            </Button>
+          </div>
+        </Card>
       </div>
     </div>
   );

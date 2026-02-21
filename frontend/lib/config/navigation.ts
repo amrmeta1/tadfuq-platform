@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   KeyRound,
   Plug,
+  Banknote,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/api/types";
@@ -108,6 +109,14 @@ export const NAV_ITEMS: NavItem[] = [
     translationKey: "fxRadar",
     href: "/app/fx-radar",
     icon: Globe,
+    allowedRoles: FINANCE_AND_ABOVE,
+    group: "ops",
+  },
+  {
+    key: "cash-positioning",
+    translationKey: "cashPositioning",
+    href: "/app/cash-positioning",
+    icon: Banknote,
     allowedRoles: FINANCE_AND_ABOVE,
     group: "ops",
   },

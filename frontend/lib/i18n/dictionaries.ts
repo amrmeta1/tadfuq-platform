@@ -50,6 +50,7 @@ export const dictionaries = {
       hq: "HQ Hub (المركز الرئيسي)",
       cashCollect: "Smart CashCollect",
       reconciliation: "Bank Reconciliation",
+      cashPositioning: "Cash Positioning",
     },
     tenant: {
       switchOrg: "Switch Organization",
@@ -315,6 +316,7 @@ export const dictionaries = {
       hq: "المركز الرئيسي (HQ)",
       cashCollect: "التحصيل الذكي",
       reconciliation: "المطابقة البنكية",
+      cashPositioning: "تمركز السيولة",
     },
     tenant: {
       switchOrg: "تبديل المنظمة",
