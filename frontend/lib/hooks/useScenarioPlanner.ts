@@ -20,7 +20,7 @@ export interface ScenarioDerived {
 }
 
 export interface ScenarioPreset {
-  key: "worst" | "base" | "best";
+  key: "worst" | "base" | "best" | "lose_client" | "delayed_collections" | "aggressive_growth" | "emergency_cost_cut";
   label: string;
   emoji: string;
   assumptions: ScenarioAssumptions;
@@ -69,6 +69,30 @@ export const PRESETS: ScenarioPreset[] = [
     label: "Best Case",
     emoji: "🚀",
     assumptions: { revenueGrowthPct: 30, costReductionPct: 15, collectionSpeedDays: 20 },
+  },
+  {
+    key: "lose_client",
+    label: "Lose Biggest Client",
+    emoji: "💔",
+    assumptions: { revenueGrowthPct: -30, costReductionPct: 0, collectionSpeedDays: 45 },
+  },
+  {
+    key: "delayed_collections",
+    label: "Delayed Collections",
+    emoji: "⏳",
+    assumptions: { revenueGrowthPct: 0, costReductionPct: 0, collectionSpeedDays: 60 },
+  },
+  {
+    key: "aggressive_growth",
+    label: "Aggressive Growth",
+    emoji: "🚀",
+    assumptions: { revenueGrowthPct: 40, costReductionPct: -5, collectionSpeedDays: 25 },
+  },
+  {
+    key: "emergency_cost_cut",
+    label: "Emergency Cost Cut",
+    emoji: "✂️",
+    assumptions: { revenueGrowthPct: -10, costReductionPct: 30, collectionSpeedDays: 30 },
   },
 ];
 

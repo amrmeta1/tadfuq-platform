@@ -119,7 +119,12 @@ export default function ScenarioPlannerPage() {
               {preset.emoji} {isAr
                 ? preset.key === "worst" ? "الحالة الأسوأ"
                 : preset.key === "base" ? "الحالة الأساسية"
-                : "الحالة المثلى"
+                : preset.key === "best" ? "الحالة المثلى"
+                : preset.key === "lose_client" ? "خسارة أكبر عميل"
+                : preset.key === "delayed_collections" ? "تأخر التحصيل"
+                : preset.key === "aggressive_growth" ? "نمو عدواني"
+                : preset.key === "emergency_cost_cut" ? "تقشف طارئ"
+                : preset.label
                 : preset.label}
             </Button>
           ))}

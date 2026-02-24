@@ -64,6 +64,9 @@ export interface CompanyProfile {
   taxAuthority: string;
   taxAuthorityAr: string;
   companySize: CompanySize | "";
+  industry: string;
+  userRole: string;
+  useCases: string[];
   isConfigured: boolean;
 }
 
@@ -85,6 +88,9 @@ const DEFAULT_PROFILE: CompanyProfile = {
   taxAuthority: "ZATCA",
   taxAuthorityAr: "هيئة الزكاة والضريبة والجمارك",
   companySize: "",
+  industry: "",
+  userRole: "",
+  useCases: [],
   isConfigured: false,
 };
 

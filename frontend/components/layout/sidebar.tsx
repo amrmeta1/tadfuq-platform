@@ -23,7 +23,19 @@ import {
   FileText,
   Target,
   Calendar,
+  CalendarDays,
   ShieldCheck,
+  Newspaper,
+  BarChart3,
+  CheckSquare,
+  Shield,
+  FileBarChart,
+  Plug,
+  Flame,
+  Settings2,
+  Layers,
+  Brain,
+  Monitor,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
@@ -45,6 +57,10 @@ const LIQUIDITY_CORE: NavItem[] = [
   { navKey: "riskRadar", icon: ShieldAlert, href: "/app/risk-radar" },
   { navKey: "projectCashFlow", icon: FolderKanban, href: "/app/project-cash-flow", highlighted: true },
   { navKey: "groupConsolidation", icon: GitMerge, href: "/app/group-consolidation", highlighted: true },
+  { navKey: "cashCalendar", icon: CalendarDays, href: "/app/cash-calendar" },
+  { navKey: "dailyBrief", icon: Newspaper, href: "/app/daily-brief", highlighted: true },
+  { navKey: "benchmark", icon: BarChart3, href: "/app/benchmark", highlighted: true },
+  { navKey: "stressTesting", icon: Flame, href: "/app/stress-testing", highlighted: true },
 ];
 
 const OPERATIONS: NavItem[] = [
@@ -61,6 +77,18 @@ const COMPLIANCE: NavItem[] = [
   { navKey: "budget", icon: Target, href: "/app/analytics/budget" },
   { navKey: "zakatVat", icon: Calendar, href: "/app/zakat-vat" },
   { navKey: "audit", icon: ShieldCheck, href: "/app/audit" },
+];
+
+const ENTERPRISE: NavItem[] = [
+  { navKey: "approvals", icon: CheckSquare, href: "/app/approvals", highlighted: true },
+  { navKey: "compliance", icon: Shield, href: "/app/compliance", highlighted: true },
+  { navKey: "executiveReport", icon: FileBarChart, href: "/app/executive-report", highlighted: true },
+  { navKey: "integrationsHub", icon: Plug, href: "/app/integrations-hub", highlighted: true },
+  { navKey: "intercompanyNetting", icon: ArrowLeftRight, href: "/app/intercompany-netting", highlighted: true },
+  { navKey: "treasuryPolicies", icon: Settings2, href: "/app/treasury-policies", highlighted: true },
+  { navKey: "cashPooling", icon: Layers, href: "/app/cash-pooling", highlighted: true },
+  { navKey: "smartCategorization", icon: Brain, href: "/app/smart-categorization", highlighted: true },
+  { navKey: "sessionManagement", icon: Monitor, href: "/app/sessions", highlighted: true },
 ];
 
 function NavSection({
@@ -125,7 +153,7 @@ function NavSection({
   );
 }
 
-type SectionKey = "liquidity" | "operations" | "compliance";
+type SectionKey = "liquidity" | "operations" | "compliance" | "enterprise";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -134,6 +162,7 @@ export function Sidebar() {
     liquidity: true,
     operations: true,
     compliance: true,
+    enterprise: true,
   });
 
   const toggle = (key: SectionKey) =>
@@ -186,7 +215,7 @@ export function Sidebar() {
 
       {/* ── AI Agents Panel ── */}
       <div className="px-3 pb-2 shrink-0">
-        <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/40 space-y-1.5">
+        <div className="rounded-lg bg-muted/60 p-2.5 space-y-1.5">
           {agents.map((agent) => (
             <div key={agent.name} className="flex items-center justify-between min-w-0">
               <div className="flex items-center gap-2 min-w-0">
@@ -211,6 +240,7 @@ export function Sidebar() {
         <NavSection title={t.nav.sectionLiquidity} items={LIQUIDITY_CORE} pathname={pathname} nav={t.nav} open={openSections.liquidity} onToggle={() => toggle("liquidity")} />
         <NavSection title={t.nav.sectionOperations} items={OPERATIONS} pathname={pathname} nav={t.nav} open={openSections.operations} onToggle={() => toggle("operations")} />
         <NavSection title={t.nav.sectionCompliance} items={COMPLIANCE} pathname={pathname} nav={t.nav} open={openSections.compliance} onToggle={() => toggle("compliance")} />
+        <NavSection title={t.nav.sectionEnterprise} items={ENTERPRISE} pathname={pathname} nav={t.nav} open={openSections.enterprise} onToggle={() => toggle("enterprise")} />
       </nav>
     </aside>
   );
