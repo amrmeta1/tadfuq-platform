@@ -27,6 +27,10 @@ const SEGMENT_LABELS: Record<string, string> = {
   analytics: "Analytics",
   waterfall: "Cash Flow",
   budget: "Budget vs Actual",
+  "project-cash-flow": "Project Cash Flow",
+  "group-consolidation": "Group Consolidation",
+  "risk-radar": "Risk Radar",
+  "zakat-vat": "Tax Calendar",
 };
 
 const SEGMENT_LABELS_AR: Record<string, string> = {
@@ -50,13 +54,18 @@ const SEGMENT_LABELS_AR: Record<string, string> = {
   analytics: "التحليلات",
   waterfall: "التدفق النقدي",
   budget: "الميزانية مقابل الفعلي",
+  "project-cash-flow": "تدفقات المشاريع",
+  "group-consolidation": "دمج المجموعة",
+  "risk-radar": "رادار المخاطر",
+  "zakat-vat": "التقويم الضريبي",
 };
 
 export function Breadcrumbs() {
   const pathname = usePathname();
   const { locale, dir } = useI18n();
+  const isAr = locale === "ar";
   const isRtl = dir === "rtl";
-  const labels = locale === "ar" ? SEGMENT_LABELS_AR : SEGMENT_LABELS;
+  const labels = isAr ? SEGMENT_LABELS_AR : SEGMENT_LABELS;
 
   const segments = pathname?.split("/").filter(Boolean) ?? [];
 

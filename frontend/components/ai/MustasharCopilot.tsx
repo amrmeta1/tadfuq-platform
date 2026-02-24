@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useI18n } from "@/lib/i18n/context";
 import { cn } from "@/lib/utils";
 
 // ── Message types ──────────────────────────────────────────────────────────────
@@ -20,8 +21,10 @@ interface Message {
 
 export function MustasharCopilot() {
   const { profile } = useCompany();
+  const { locale } = useI18n();
+  const isAr = locale === "ar";
   const currency = profile.currency || "SAR";
-  const companyName = profile.companyName || "شركتك";
+  const companyName = profile.companyName || (isAr ? "شركتك" : "your company");
 
   const [open, setOpen] = useState(false);
 
@@ -29,22 +32,30 @@ export function MustasharCopilot() {
     {
       id: "1",
       role: "ai",
-      text: `أهلاً بك في ${companyName}. رصيدك اليوم آمن، ولكن لاحظت فاتورة بقيمة 45,000 ${currency} تستحق غداً. كيف يمكنني مساعدتك؟`,
+      text: isAr
+        ? `أهلاً بك في ${companyName}. رصيدك اليوم آمن، ولكن لاحظت فاتورة بقيمة 45,000 ${currency} تستحق غداً. كيف يمكنني مساعدتك؟`
+        : `Welcome to ${companyName}. Your balance today is safe, but I noticed an invoice of ${currency} 45,000 due tomorrow. How can I help?`,
     },
     {
       id: "2",
       role: "user",
-      text: `هل يمكنني قبول عقد المقاولات الجديد بقيمة 350,000 ${currency} يبدأ الشهر القادم؟`,
+      text: isAr
+        ? `هل يمكنني قبول عقد المقاولات الجديد بقيمة 350,000 ${currency} يبدأ الشهر القادم؟`
+        : `Can I accept the new contracting deal worth ${currency} 350,000 starting next month?`,
     },
     {
       id: "3",
       role: "ai",
-      text: `قمت بمحاكاة التدفق النقدي. نعم يمكنك، ولكن ستحتاج لطلب دفعة مقدمة (Advance Payment) بنسبة 20% لتغطية تكاليف المواد لتجنب عجز بقيمة 12,000 ${currency} يوم 10 الشهر القادم.`,
+      text: isAr
+        ? `قمت بمحاكاة التدفق النقدي. نعم يمكنك، ولكن ستحتاج لطلب دفعة مقدمة (Advance Payment) بنسبة 20% لتغطية تكاليف المواد لتجنب عجز بقيمة 12,000 ${currency} يوم 10 الشهر القادم.`
+        : `I simulated the cash flow. Yes you can, but you'll need to request a 20% Advance Payment to cover material costs and avoid a ${currency} 12,000 deficit on the 10th of next month.`,
     },
     {
       id: "4",
       role: "user",
-      text: "شكراً، سأتواصل مع العميل.",
+      text: isAr
+        ? "شكراً، سأتواصل مع العميل."
+        : "Thanks, I'll reach out to the client.",
     },
   ];
 
@@ -52,7 +63,7 @@ export function MustasharCopilot() {
     <>
       {/* ── Chat window ── */}
       {open && (
-        <div className="fixed bottom-20 left-6 z-50 w-[350px] h-[500px] flex flex-col" dir="rtl">
+        <div className="fixed bottom-20 left-6 z-50 w-[350px] h-[500px] flex flex-col" dir={isAr ? "rtl" : "ltr"}>
           <Card className="flex flex-col h-full shadow-2xl border-border/60 overflow-hidden">
 
             {/* Header */}
@@ -62,12 +73,14 @@ export function MustasharCopilot() {
                   <Bot className="h-4 w-4 text-indigo-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold leading-none">الوكيل مُستشار</p>
+                  <p className="text-sm font-semibold leading-none">
+                    {isAr ? "الوكيل مُستشار" : "Mustashar Agent"}
+                  </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">(Decision Agent)</p>
                 </div>
                 <span className="flex items-center gap-1 text-[10px] text-emerald-600 font-medium ms-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  متصل
+                  {isAr ? "متصل" : "Online"}
                 </span>
               </div>
               <Button
@@ -108,7 +121,7 @@ export function MustasharCopilot() {
             {/* Input footer */}
             <div className="flex items-center gap-2 px-4 py-3 border-t bg-card shrink-0">
               <Input
-                placeholder="اكتب رسالتك..."
+                placeholder={isAr ? "اكتب رسالتك..." : "Type your message..."}
                 className="h-8 text-xs flex-1"
                 disabled
               />
@@ -130,7 +143,7 @@ export function MustasharCopilot() {
             ? "bg-zinc-800 hover:bg-zinc-700 text-white"
             : "bg-indigo-600 hover:bg-indigo-700 text-white"
         )}
-        aria-label="فتح الوكيل مستشار"
+        aria-label={isAr ? "فتح الوكيل مستشار" : "Open Mustashar Agent"}
       >
         {open ? <X className="h-5 w-5" /> : <Bot className="h-5 w-5" />}
       </button>

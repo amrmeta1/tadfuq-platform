@@ -19,21 +19,23 @@ interface Subsidiary {
   balance: number;
 }
 
-const STATUS_META: Record<EntityStatus, {
+function getStatusMeta(isAr: boolean): Record<EntityStatus, {
   dot: string; label: string; selectedCls: string; badgeCls: string;
-}> = {
-  risk:   { dot: "🔴", label: "عجز وشيك",  selectedCls: "bg-red-500/5 border-s-4 border-s-red-500",          badgeCls: "border-destructive/40 bg-destructive/5 text-destructive" },
-  watch:  { dot: "🟡", label: "انتباه",     selectedCls: "bg-orange-500/5 border-s-4 border-s-orange-400",    badgeCls: "border-orange-400/40 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" },
-  stable: { dot: "🟢", label: "مستقر",      selectedCls: "hover:bg-muted/50 border-s-4 border-s-transparent", badgeCls: "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" },
-};
+}> {
+  return {
+    risk:   { dot: "🔴", label: isAr ? "عجز وشيك" : "Imminent Deficit",  selectedCls: "bg-red-500/5 border-s-4 border-s-red-500",          badgeCls: "border-destructive/40 bg-destructive/5 text-destructive" },
+    watch:  { dot: "🟡", label: isAr ? "انتباه" : "Watch",               selectedCls: "bg-orange-500/5 border-s-4 border-s-orange-400",    badgeCls: "border-orange-400/40 bg-orange-50 dark:bg-orange-950/20 text-orange-600 dark:text-orange-400" },
+    stable: { dot: "🟢", label: isAr ? "مستقر" : "Stable",               selectedCls: "hover:bg-muted/50 border-s-4 border-s-transparent", badgeCls: "border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400" },
+  };
+}
 
-function buildEntities(name: string): Subsidiary[] {
+function buildEntities(name: string, isAr: boolean): Subsidiary[] {
   return [
-    { id: "1", sector: `${name} - قطاع المقاولات`,   status: "risk",   runway: "يكفي لـ 14 يوم فقط", balance: -45_000    },
-    { id: "2", sector: `${name} - قطاع التجزئة`,     status: "stable", runway: "يكفي لـ 8 أشهر",     balance: 3_400_000  },
-    { id: "3", sector: `${name} - قطاع التقنية`,     status: "stable", runway: "يكفي لـ 14 شهر",     balance: 5_200_000  },
-    { id: "4", sector: `${name} - قطاع العقارات`,    status: "watch",  runway: "يكفي لـ 6 أسابيع",   balance: 820_000    },
-    { id: "5", sector: `${name} - قطاع اللوجستيات`, status: "stable", runway: "يكفي لـ 11 شهر",     balance: 2_180_000  },
+    { id: "1", sector: isAr ? `${name} - قطاع المقاولات` : `${name} - Contracting`,   status: "risk",   runway: isAr ? "يكفي لـ 14 يوم فقط" : "14 days remaining", balance: -45_000    },
+    { id: "2", sector: isAr ? `${name} - قطاع التجزئة` : `${name} - Retail`,           status: "stable", runway: isAr ? "يكفي لـ 8 أشهر" : "8 months remaining",     balance: 3_400_000  },
+    { id: "3", sector: isAr ? `${name} - قطاع التقنية` : `${name} - Technology`,       status: "stable", runway: isAr ? "يكفي لـ 14 شهر" : "14 months remaining",    balance: 5_200_000  },
+    { id: "4", sector: isAr ? `${name} - قطاع العقارات` : `${name} - Real Estate`,     status: "watch",  runway: isAr ? "يكفي لـ 6 أسابيع" : "6 weeks remaining",    balance: 820_000    },
+    { id: "5", sector: isAr ? `${name} - قطاع اللوجستيات` : `${name} - Logistics`,     status: "stable", runway: isAr ? "يكفي لـ 11 شهر" : "11 months remaining",    balance: 2_180_000  },
   ];
 }
 
@@ -56,12 +58,14 @@ function fmtFull(n: number, curr: string): string {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HQHubPage() {
-  const { dir } = useI18n();
+  const { locale, dir } = useI18n();
+  const isAr = locale === "ar";
   const { profile } = useCompany();
   const curr = profile.currency || "SAR";
-  const companyName = profile.companyName || "المجموعة";
+  const companyName = profile.companyName || (isAr ? "المجموعة" : "The Group");
 
-  const ENTITIES = buildEntities(companyName);
+  const STATUS_META = getStatusMeta(isAr);
+  const ENTITIES = buildEntities(companyName, isAr);
   const [selectedId, setSelectedId] = useState<string>("1");
   const selected = ENTITIES.find((e) => e.id === selectedId) ?? ENTITIES[0];
   const selMeta = STATUS_META[selected.status];
@@ -81,29 +85,29 @@ export default function HQHubPage() {
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5 text-indigo-500 shrink-0" />
             <h1 className="text-2xl font-bold tracking-tight">
-              المركز الرئيسي للمجموعة{" "}
-              <span className="text-muted-foreground font-normal text-lg">(Group HQ)</span>
+              {isAr ? "المركز الرئيسي للمجموعة" : "Group Headquarters"}{" "}
+              {isAr && <span className="text-muted-foreground font-normal text-lg">(Group HQ)</span>}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1" suppressHydrationWarning>
-            مجموعة {companyName} القابضة
+            {isAr ? `مجموعة ${companyName} القابضة` : `${companyName} Holding Group`}
           </p>
           <div className="flex flex-wrap gap-3 mt-4">
             <div className="rounded-lg border bg-card p-3 min-w-[170px]">
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">السيولة المجمعة</p>
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">{isAr ? "السيولة المجمعة" : "Total Liquidity"}</p>
               <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>18,450,000 {curr}</p>
-              <div className="text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5">موزعة على 5 فروع</div>
+              <div className="text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5">{isAr ? "موزعة على 5 فروع" : "Across 5 branches"}</div>
             </div>
             <div className="rounded-lg border bg-card p-3 min-w-[150px]">
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">شركات في خطر</p>
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">{isAr ? "شركات في خطر" : "At Risk"}</p>
               <p className="text-lg font-bold tabular-nums text-destructive flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-destructive animate-pulse shrink-0" />1 فرع
+                <span className="w-2 h-2 rounded-full bg-destructive animate-pulse shrink-0" />{isAr ? "1 فرع" : "1 Branch"}
               </p>
             </div>
             <div className="rounded-lg border bg-card p-3 min-w-[170px]">
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">فائض متاح</p>
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">{isAr ? "فائض متاح" : "Available Surplus"}</p>
               <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>2,100,000 {curr}</p>
-              <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">↗ متاح للتحويل</div>
+              <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">{isAr ? "↗ متاح للتحويل" : "↗ Available for Transfer"}</div>
             </div>
           </div>
         </div>
@@ -112,10 +116,10 @@ export default function HQHubPage() {
         <Card className="flex-1 overflow-hidden flex flex-col shadow-sm border-border/50">
           <div className="flex items-center gap-2 p-3 border-b shrink-0">
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0">
-              حالة السيولة <ChevronDown className="h-3 w-3 opacity-60" />
+              {isAr ? "حالة السيولة" : "Liquidity Status"} <ChevronDown className="h-3 w-3 opacity-60" />
             </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0">
-              ترتيب حسب الرصيد <ChevronDown className="h-3 w-3 opacity-60" />
+              {isAr ? "ترتيب حسب الرصيد" : "Sort by Balance"} <ChevronDown className="h-3 w-3 opacity-60" />
             </Button>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -154,7 +158,7 @@ export default function HQHubPage() {
         {/* Subsidiary context card */}
         <Card className={`p-5 shadow-sm border-border/50 shrink-0 border-t-4 ${topBorderCls}`}>
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold" suppressHydrationWarning>
-            فرع: {selected.sector}
+            {isAr ? "فرع" : "Branch"}: {selected.sector}
           </p>
           <p className={`text-3xl font-bold tabular-nums mt-2 ${selected.balance < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`} suppressHydrationWarning>
             <span dir="ltr">{fmtFull(selected.balance, curr)}</span>
@@ -166,14 +170,14 @@ export default function HQHubPage() {
           </div>
           {selected.status === "risk" && (
             <p className="text-xs text-destructive mt-2 font-medium">
-              🔴 عجز متوقع بعد 14 يوم لسداد الرواتب (Expected Payroll Shortfall)
+              {isAr ? "🔴 عجز متوقع بعد 14 يوم لسداد الرواتب (Expected Payroll Shortfall)" : "🔴 Expected payroll shortfall in 14 days"}
             </p>
           )}
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-            <div><p className="font-medium text-foreground">القطاع</p><p>المقاولات والبنية التحتية</p></div>
-            <div><p className="font-medium text-foreground">البنك</p><p>QNB — الجاري</p></div>
-            <div><p className="font-medium text-foreground">آخر تحديث</p><p>اليوم، 02:14 ص</p></div>
-            <div><p className="font-medium text-foreground">العملة</p><p suppressHydrationWarning>{curr}</p></div>
+            <div><p className="font-medium text-foreground">{isAr ? "القطاع" : "Sector"}</p><p>{isAr ? "المقاولات والبنية التحتية" : "Contracting & Infrastructure"}</p></div>
+            <div><p className="font-medium text-foreground">{isAr ? "البنك" : "Bank"}</p><p>{isAr ? "QNB — الجاري" : "QNB — Current"}</p></div>
+            <div><p className="font-medium text-foreground">{isAr ? "آخر تحديث" : "Last Updated"}</p><p>{isAr ? "اليوم، 02:14 ص" : "Today, 02:14 AM"}</p></div>
+            <div><p className="font-medium text-foreground">{isAr ? "العملة" : "Currency"}</p><p suppressHydrationWarning>{curr}</p></div>
           </div>
         </Card>
 
@@ -182,7 +186,7 @@ export default function HQHubPage() {
           <div className="flex items-center gap-2">
             <span className="text-lg">🧠</span>
             <div>
-              <p className="text-sm font-bold">خطة الإنقاذ من الوكيل مُستشار</p>
+              <p className="text-sm font-bold">{isAr ? "خطة الإنقاذ من الوكيل مُستشار" : "Agent Rescue Plan"}</p>
               <p className="text-[10px] text-muted-foreground">Inter-Company Rescue Plan</p>
             </div>
             <span className="ms-auto inline-flex items-center gap-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-[10px] font-semibold px-2 py-0.5">
@@ -192,17 +196,28 @@ export default function HQHubPage() {
 
           <div className="rounded-lg bg-white/60 dark:bg-white/5 border border-indigo-100 dark:border-indigo-900/50 p-4">
             <p className="text-sm text-foreground leading-relaxed" suppressHydrationWarning>
-              قطاع المقاولات سيواجه عجزاً بقيمة <strong>45,000 {curr}</strong> لسداد الرواتب.
-              في المقابل، يمتلك <strong>(قطاع التجزئة)</strong> فائضاً نقدياً غير مستغل بقيمة{" "}
-              <strong>2.1 مليون {curr}</strong> في بنك QNB. أنصح بتنفيذ تحويل داخلي
-              (Inter-company Loan) لتجنب السحب على المكشوف وتوفير 7% فوائد بنكية.
+              {isAr ? (
+                <>
+                  قطاع المقاولات سيواجه عجزاً بقيمة <strong>45,000 {curr}</strong> لسداد الرواتب.
+                  في المقابل، يمتلك <strong>(قطاع التجزئة)</strong> فائضاً نقدياً غير مستغل بقيمة{" "}
+                  <strong>2.1 مليون {curr}</strong> في بنك QNB. أنصح بتنفيذ تحويل داخلي
+                  (Inter-company Loan) لتجنب السحب على المكشوف وتوفير 7% فوائد بنكية.
+                </>
+              ) : (
+                <>
+                  The Contracting sector faces a <strong>45,000 {curr}</strong> payroll shortfall.
+                  Meanwhile, the <strong>Retail sector</strong> holds an unused cash surplus of{" "}
+                  <strong>2.1M {curr}</strong> at QNB. We recommend an inter-company loan
+                  to avoid overdraft and save 7% in bank interest.
+                </>
+              )}
             </p>
           </div>
 
           {/* Visual transfer schema */}
           <div className="flex items-center justify-center gap-3 rounded-lg bg-white/60 dark:bg-white/5 border border-indigo-100 dark:border-indigo-900/50 p-3 flex-wrap">
             <span className="rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold px-2.5 py-1.5 border border-emerald-300 dark:border-emerald-800">
-              فرع التجزئة
+              {isAr ? "فرع التجزئة" : "Retail Branch"}
             </span>
             <ArrowRightLeft className="h-4 w-4 text-indigo-500 shrink-0" />
             <span className="rounded-md bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 text-xs font-bold px-2.5 py-1.5 border border-indigo-300 dark:border-indigo-800 tabular-nums" suppressHydrationWarning>
@@ -210,7 +225,7 @@ export default function HQHubPage() {
             </span>
             <ArrowRightLeft className="h-4 w-4 text-indigo-500 shrink-0" />
             <span className="rounded-md bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-semibold px-2.5 py-1.5 border border-red-300 dark:border-red-800">
-              فرع المقاولات
+              {isAr ? "فرع المقاولات" : "Contracting Branch"}
             </span>
           </div>
 
@@ -218,20 +233,22 @@ export default function HQHubPage() {
             <div className="flex items-start gap-2 rounded-lg bg-destructive/5 border border-destructive/20 p-3">
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <p className="text-xs text-destructive leading-relaxed" suppressHydrationWarning>
-                تحذير: بدون تدخل فوري، سيتجاوز الرصيد حد السحب على المكشوف المصرح به (100,000 {curr}) خلال 14 يوماً.
+                {isAr
+                  ? `تحذير: بدون تدخل فوري، سيتجاوز الرصيد حد السحب على المكشوف المصرح به (100,000 ${curr}) خلال 14 يوماً.`
+                  : `Warning: Without immediate action, the balance will exceed the authorized overdraft limit (100,000 ${curr}) within 14 days.`}
               </p>
             </div>
           )}
 
           <div className="flex flex-col gap-2 mt-auto">
             <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2" size="sm" suppressHydrationWarning>
-              ⚡ تنفيذ تحويل داخلي بقيمة 50,000 {curr} (Execute Transfer)
+              {isAr ? `⚡ تنفيذ تحويل داخلي بقيمة 50,000 ${curr}` : `⚡ Execute Internal Transfer — 50,000 ${curr}`}
             </Button>
             <Button variant="outline" className="w-full border-destructive text-destructive hover:bg-destructive/5 gap-2" size="sm">
-              طلب تسهيلات ائتمانية من البنك (Request Overdraft)
+              {isAr ? "طلب تسهيلات ائتمانية من البنك" : "Request Bank Credit Facility"}
             </Button>
             <Button variant="outline" className="w-full gap-2" size="sm">
-              عرض التفاصيل المالية للفرع (View Branch Details)
+              {isAr ? "عرض التفاصيل المالية للفرع" : "View Branch Financial Details"}
             </Button>
           </div>
         </Card>

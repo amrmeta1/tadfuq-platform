@@ -58,7 +58,7 @@ export default function ReconciliationPage() {
     },
     {
       label: { en: "Time Saved This Month", ar: "الوقت الموفر هذا الشهر" },
-      value: isAr ? "١٨ ساعة" : "18 Hours",
+      value: isAr ? "18 ساعة" : "18 Hours",
       sub: { en: "vs. manual reconciliation", ar: "مقارنةً بالمطابقة اليدوية" },
       icon: Clock,
       valueClass: "text-emerald-600 dark:text-emerald-400",
@@ -76,7 +76,7 @@ export default function ReconciliationPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isAr
-              ? "مطابقة تلقائية لكشوف الحساب البنكية مع دفتر الأستاذ — بدقة تصل إلى ٩٩٪."
+              ? "مطابقة تلقائية لكشوف الحساب البنكية مع دفتر الأستاذ — بدقة تصل إلى 99%."
               : "Automatically match raw bank statement lines with your accounting ledger — up to 99% accuracy."}
           </p>
         </div>
@@ -89,13 +89,13 @@ export default function ReconciliationPage() {
               <>
                 <span className="font-semibold text-blue-950 dark:text-blue-100">مستشار AI:</span>{" "}
                 تمت معالجة{" "}
-                <span className="font-bold">٣٤٢ معاملة بنكية</span>{" "}
+                <span className="font-bold">342 معاملة بنكية</span>{" "}
                 في{" "}
-                <span className="font-bold">١.٢ ثانية</span>.{" "}
+                <span className="font-bold">1.2 ثانية</span>.{" "}
                 تم إيجاد{" "}
-                <span className="font-bold">٣١٨ تطابقاً دقيقاً</span>{" "}
-                (نسبة أتمتة ٩٣٪).{" "}
-                <span className="font-bold text-amber-700 dark:text-amber-400">٢٤ معاملة</span>{" "}
+                <span className="font-bold">318 تطابقاً دقيقاً</span>{" "}
+                (نسبة أتمتة 93%).{" "}
+                <span className="font-bold text-amber-700 dark:text-amber-400">24 معاملة</span>{" "}
                 تتطلب مراجعة يدوية.
               </>
             ) : (
@@ -119,7 +119,7 @@ export default function ReconciliationPage() {
             className="ms-auto shrink-0 gap-1.5 bg-blue-600 hover:bg-blue-500 text-white border-0"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
-            {isAr ? "✨ موافقة تلقائية على تطابقات ٩٩٪" : "✨ Auto-Approve 99% Matches"}
+            {isAr ? "✨ موافقة تلقائية على تطابقات 99%" : "✨ Auto-Approve 99% Matches"}
           </Button>
         </div>
 

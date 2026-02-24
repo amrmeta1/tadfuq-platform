@@ -20,70 +20,10 @@ import { Badge } from "@/components/ui/badge";
 interface Integration {
   key: string;
   name: string;
-  nameAr: string;
   description: string;
-  descriptionAr: string;
   icon: React.ReactNode;
   interactive?: boolean;
 }
-
-// ── Data ───────────────────────────────────────────────────────────────────────
-
-const BANK_INTEGRATIONS: Integration[] = [
-  {
-    key: "qnb",
-    name: "QNB",
-    nameAr: "بنك قطر الوطني",
-    description: "Qatar National Bank — Open Banking API",
-    descriptionAr: "بنك قطر الوطني — واجهة Open Banking",
-    icon: <Building2 className="h-6 w-6 text-indigo-600" />,
-    interactive: true,
-  },
-  {
-    key: "alrajhi",
-    name: "Al Rajhi Bank",
-    nameAr: "مصرف الراجحي",
-    description: "Al Rajhi Bank — Open Banking API",
-    descriptionAr: "مصرف الراجحي — واجهة Open Banking",
-    icon: <Building2 className="h-6 w-6 text-emerald-600" />,
-  },
-  {
-    key: "emiratesnbd",
-    name: "Emirates NBD",
-    nameAr: "بنك الإمارات دبي الوطني",
-    description: "Emirates NBD — Open Banking API",
-    descriptionAr: "بنك الإمارات دبي الوطني — واجهة Open Banking",
-    icon: <Building2 className="h-6 w-6 text-rose-600" />,
-  },
-];
-
-const ACCOUNTING_INTEGRATIONS: Integration[] = [
-  {
-    key: "wafeq",
-    name: "Wafeq (وافق)",
-    nameAr: "وافق",
-    description: "GCC-native accounting software",
-    descriptionAr: "برنامج محاسبة مخصص لدول الخليج",
-    icon: <BookOpen className="h-6 w-6 text-violet-600" />,
-    interactive: true,
-  },
-  {
-    key: "zoho",
-    name: "Zoho Books",
-    nameAr: "Zoho Books",
-    description: "Cloud accounting for SMEs",
-    descriptionAr: "محاسبة سحابية للشركات الصغيرة والمتوسطة",
-    icon: <BookOpen className="h-6 w-6 text-orange-500" />,
-  },
-  {
-    key: "quickbooks",
-    name: "QuickBooks Online",
-    nameAr: "QuickBooks Online",
-    description: "Intuit QuickBooks — global standard",
-    descriptionAr: "المعيار العالمي للمحاسبة",
-    icon: <BookOpen className="h-6 w-6 text-green-600" />,
-  },
-];
 
 // ── Integration Card ───────────────────────────────────────────────────────────
 
@@ -113,10 +53,10 @@ function IntegrationCard({
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">
-                {isAr ? integration.nameAr : integration.name}
+                {integration.name}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                {isAr ? integration.descriptionAr : integration.description}
+                {integration.description}
               </p>
             </div>
           </div>
@@ -156,12 +96,56 @@ function IntegrationCard({
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
-  const { dir } = useI18n();
+  const { locale, dir } = useI18n();
   const { profile } = useCompany();
-  const isAr = profile.currency !== undefined ? dir === "rtl" : dir === "rtl";
+  const isAr = locale === "ar";
 
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connected, setConnected] = useState<string[]>([]);
+
+  const bankIntegrations: Integration[] = [
+    {
+      key: "qnb",
+      name: isAr ? "بنك قطر الوطني" : "QNB",
+      description: isAr ? "بنك قطر الوطني — واجهة Open Banking" : "Qatar National Bank — Open Banking API",
+      icon: <Building2 className="h-6 w-6 text-indigo-600" />,
+      interactive: true,
+    },
+    {
+      key: "alrajhi",
+      name: isAr ? "مصرف الراجحي" : "Al Rajhi Bank",
+      description: isAr ? "مصرف الراجحي — واجهة Open Banking" : "Al Rajhi Bank — Open Banking API",
+      icon: <Building2 className="h-6 w-6 text-emerald-600" />,
+    },
+    {
+      key: "emiratesnbd",
+      name: isAr ? "بنك الإمارات دبي الوطني" : "Emirates NBD",
+      description: isAr ? "بنك الإمارات دبي الوطني — واجهة Open Banking" : "Emirates NBD — Open Banking API",
+      icon: <Building2 className="h-6 w-6 text-rose-600" />,
+    },
+  ];
+
+  const accountingIntegrations: Integration[] = [
+    {
+      key: "wafeq",
+      name: isAr ? "وافق" : "Wafeq (وافق)",
+      description: isAr ? "برنامج محاسبة مخصص لدول الخليج" : "GCC-native accounting software",
+      icon: <BookOpen className="h-6 w-6 text-violet-600" />,
+      interactive: true,
+    },
+    {
+      key: "zoho",
+      name: isAr ? "Zoho Books" : "Zoho Books",
+      description: isAr ? "محاسبة سحابية للشركات الصغيرة والمتوسطة" : "Cloud accounting for SMEs",
+      icon: <BookOpen className="h-6 w-6 text-orange-500" />,
+    },
+    {
+      key: "quickbooks",
+      name: isAr ? "QuickBooks Online" : "QuickBooks Online",
+      description: isAr ? "المعيار العالمي للمحاسبة" : "Intuit QuickBooks — global standard",
+      icon: <BookOpen className="h-6 w-6 text-green-600" />,
+    },
+  ];
 
   function handleConnect(key: string) {
     setConnecting(key);
@@ -177,11 +161,12 @@ export default function IntegrationsPage() {
       {/* ══ HEADER ══ */}
       <div>
         <h1 className="text-lg font-semibold tracking-tight">
-          مصادر البيانات والربط
-          <span className="text-muted-foreground font-normal text-base ms-2">(Data Integrations)</span>
+          {isAr ? "مصادر البيانات والربط" : "Data Integrations"}
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          اربط حساباتك البنكية والأنظمة المحاسبية لتفعيل وكلاء الذكاء الاصطناعي.
+          {isAr
+            ? "اربط حساباتك البنكية والأنظمة المحاسبية لتفعيل وكلاء الذكاء الاصطناعي."
+            : "Connect your bank accounts and accounting systems to activate AI agents."}
         </p>
       </div>
 
@@ -189,8 +174,7 @@ export default function IntegrationsPage() {
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold">الربط البنكي</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">(Open Banking)</p>
+            <h2 className="text-sm font-semibold">{isAr ? "الربط البنكي" : "Open Banking"}</h2>
           </div>
           <Badge variant="outline" className="text-[10px] gap-1 font-medium">
             <ShieldCheck className="h-3 w-3 text-emerald-600" />
@@ -198,7 +182,7 @@ export default function IntegrationsPage() {
           </Badge>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {BANK_INTEGRATIONS.map((integration) => (
+          {bankIntegrations.map((integration) => (
             <IntegrationCard
               key={integration.key}
               integration={integration}
@@ -214,11 +198,10 @@ export default function IntegrationsPage() {
       {/* ══ SECTION 2 — Accounting Sync ══ */}
       <section className="space-y-4">
         <div>
-          <h2 className="text-sm font-semibold">الأنظمة المحاسبية</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">(Accounting Sync)</p>
+          <h2 className="text-sm font-semibold">{isAr ? "الأنظمة المحاسبية" : "Accounting Sync"}</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {ACCOUNTING_INTEGRATIONS.map((integration) => (
+          {accountingIntegrations.map((integration) => (
             <IntegrationCard
               key={integration.key}
               integration={integration}

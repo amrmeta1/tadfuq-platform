@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { listTenants } from "@/lib/api/tenant-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MustasharCopilot } from "@/components/ai/MustasharCopilot";
+import { DEV_SKIP_AUTH, getMockTenantList } from "@/lib/api/mock-data";
 
 function AppShellSkeleton() {
   return (
@@ -54,23 +55,49 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     currentTenant,
     setCurrentTenant,
     setMemberships,
+    isLoading,
     setIsLoading,
   } = useTenant();
 
+  const tenantInitDone = useRef(false);
+
   useEffect(() => {
-    if (status === "unauthenticated") {
+    if (DEV_SKIP_AUTH && status === "unauthenticated") {
+      if (tenantInitDone.current) return;
+      tenantInitDone.current = true;
+      const mock = getMockTenantList();
+      const membershipsWithTenant = mock.data.map((t) => ({
+        id: t.id,
+        tenant_id: t.id,
+        user_id: "",
+        role: "accountant_readonly" as const,
+        status: "active" as const,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        tenant: t,
+      }));
+      setMemberships(membershipsWithTenant);
+      if (mock.data.length > 0) {
+        setCurrentTenant(mock.data[0]);
+      }
+      setIsLoading(false);
+      return;
+    }
+    if (status === "unauthenticated" && !DEV_SKIP_AUTH) {
       router.push("/login");
     }
-  }, [status, router]);
+  }, [status, router, setCurrentTenant, setMemberships, setIsLoading]);
 
   const { data: tenantList } = useQuery({
     queryKey: ["tenants"],
     queryFn: () => listTenants(),
-    enabled: status === "authenticated",
+    enabled: status === "authenticated" && !DEV_SKIP_AUTH,
   });
 
   useEffect(() => {
-    if (!tenantList?.data) return;
+    if (DEV_SKIP_AUTH || !tenantList?.data) return;
+    if (tenantInitDone.current) return;
+    tenantInitDone.current = true;
 
     const membershipsWithTenant = tenantList.data.map((t) => ({
       id: t.id,
@@ -85,7 +112,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     setMemberships(membershipsWithTenant);
 
-    if (!currentTenant && tenantList.data.length > 0) {
+    if (tenantList.data.length > 0) {
       const savedId =
         typeof window !== "undefined"
           ? localStorage.getItem("currentTenantId")
@@ -95,17 +122,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     setIsLoading(false);
-  }, [tenantList, currentTenant, setCurrentTenant, setMemberships, setIsLoading]);
+  }, [tenantList, setCurrentTenant, setMemberships, setIsLoading]);
 
-  if (status === "loading") return <AppShellSkeleton />;
-  if (status === "unauthenticated") return null;
+  if (status === "loading" && !DEV_SKIP_AUTH) return <AppShellSkeleton />;
+  if (status === "unauthenticated" && !DEV_SKIP_AUTH) return null;
+  if (DEV_SKIP_AUTH && status === "unauthenticated" && isLoading) return <AppShellSkeleton />;
 
   return (
     <div className="flex h-screen overflow-hidden" dir={dir}>
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Navbar />
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 [&:has([data-page-full])]:p-0 [&:has([data-page-full])]:overflow-hidden">
+        <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-20 [&:has([data-page-full])]:p-0 [&:has([data-page-full])]:pb-0 [&:has([data-page-full])]:overflow-hidden">
           {children}
         </main>
       </div>

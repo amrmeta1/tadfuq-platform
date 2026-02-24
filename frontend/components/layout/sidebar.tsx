@@ -1,94 +1,217 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useI18n } from "@/lib/i18n/context";
-import { usePermissions } from "@/lib/hooks/use-permissions";
-import { useSidebar } from "@/lib/hooks/use-sidebar";
-import { useCompany, COUNTRY_PROFILES } from "@/contexts/CompanyContext";
+import { usePathname } from "next/navigation";
+import {
+  ChevronDown,
+  ChevronLeft,
+  Search,
+  LayoutDashboard,
+  Banknote,
+  TrendingUp,
+  SlidersHorizontal,
+  ShieldAlert,
+  FolderKanban,
+  GitMerge,
+  ArrowUpRight,
+  MessageCircle,
+  Link2,
+  Globe,
+  ArrowLeftRight,
+  Bell,
+  FileText,
+  Target,
+  Calendar,
+  ShieldCheck,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarNav } from "./sidebar-nav";
+import { useI18n } from "@/lib/i18n/context";
+import type { LucideIcon } from "lucide-react";
+import type { Dictionary } from "@/lib/i18n/dictionaries";
 
-export function Sidebar() {
-  const { t, dir } = useI18n();
-  const { visibleNav } = usePermissions();
-  const { collapsed, toggle } = useSidebar();
-  const { profile } = useCompany();
-  const isRtl = dir === "rtl";
+interface NavItem {
+  navKey: keyof Dictionary["nav"];
+  icon: LucideIcon;
+  href: string;
+  highlighted?: boolean;
+}
 
-  const CollapseIcon = collapsed
-    ? isRtl ? ChevronLeft : ChevronRight
-    : isRtl ? ChevronRight : ChevronLeft;
+const LIQUIDITY_CORE: NavItem[] = [
+  { navKey: "dashboard", icon: LayoutDashboard, href: "/app/dashboard" },
+  { navKey: "cashPositioning", icon: Banknote, href: "/app/cash-positioning" },
+  { navKey: "forecast13w", icon: TrendingUp, href: "/app/forecast" },
+  { navKey: "scenarioPlanner", icon: SlidersHorizontal, href: "/app/scenario-planner" },
+  { navKey: "riskRadar", icon: ShieldAlert, href: "/app/risk-radar" },
+  { navKey: "projectCashFlow", icon: FolderKanban, href: "/app/project-cash-flow", highlighted: true },
+  { navKey: "groupConsolidation", icon: GitMerge, href: "/app/group-consolidation", highlighted: true },
+];
 
-  const companyName = profile.companyName || "CashFlow.ai Workspace";
-  const cp = profile.country ? COUNTRY_PROFILES[profile.country] : null;
-  const flag = cp?.flag ?? null;
+const OPERATIONS: NavItem[] = [
+  { navKey: "payables", icon: ArrowUpRight, href: "/app/payables" },
+  { navKey: "cashCollect", icon: MessageCircle, href: "/app/cash-collect" },
+  { navKey: "reconciliation", icon: Link2, href: "/app/reconciliation" },
+  { navKey: "fxRadar", icon: Globe, href: "/app/fx-radar" },
+];
+
+const COMPLIANCE: NavItem[] = [
+  { navKey: "transactions", icon: ArrowLeftRight, href: "/app/transactions" },
+  { navKey: "alerts", icon: Bell, href: "/app/alerts" },
+  { navKey: "reports", icon: FileText, href: "/app/reports" },
+  { navKey: "budget", icon: Target, href: "/app/analytics/budget" },
+  { navKey: "zakatVat", icon: Calendar, href: "/app/zakat-vat" },
+  { navKey: "audit", icon: ShieldCheck, href: "/app/audit" },
+];
+
+function NavSection({
+  title,
+  items,
+  pathname,
+  nav,
+  open,
+  onToggle,
+}: {
+  title: string;
+  items: NavItem[];
+  pathname: string;
+  nav: Dictionary["nav"];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const hasActive = items.some((item) => pathname === item.href);
 
   return (
-    <TooltipProvider delayDuration={0}>
-      <aside
-        data-sidebar
-        className={cn(
-          "hidden md:flex flex-col border-e bg-card transition-all duration-200 shrink-0 print:hidden",
-          collapsed ? "w-[52px]" : "w-[240px]"
-        )}
+    <div className="space-y-0.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
       >
-        {/* ── Company header ── */}
-        <Link
-          href="/app/dashboard"
+        <span className="flex items-center gap-1.5">
+          {title}
+          {!open && hasActive && (
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+          )}
+        </span>
+        <ChevronLeft
           className={cn(
-            "flex h-14 items-center border-b px-3 gap-2.5 overflow-hidden shrink-0 hover:bg-accent/50 transition-colors",
-            collapsed && "justify-center px-0"
+            "h-3 w-3 transition-transform duration-200",
+            open && "-rotate-90",
           )}
-        >
-          {/* Badge / flag */}
-          {collapsed ? (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xs">
-              {flag ?? "CF"}
-            </div>
-          ) : (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-base leading-none">
-              {flag ?? (
-                <span className="text-primary font-bold text-xs">CF</span>
+        />
+      </button>
+      {open &&
+        items.map((item) => {
+          const active = pathname === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors min-w-0",
+                active
+                  ? "bg-muted text-foreground font-semibold border-s-2 border-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                item.highlighted && !active && "border-s-2 border-emerald-500/50",
               )}
-            </div>
-          )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate">{nav[item.navKey]}</span>
+            </Link>
+          );
+        })}
+    </div>
+  );
+}
 
-          {!collapsed && (
-            <div className="min-w-0">
-              <p suppressHydrationWarning className="text-sm font-semibold truncate leading-tight">
-                {companyName}
-              </p>
-              {cp && (
-                <p suppressHydrationWarning className="text-[10px] text-muted-foreground truncate tabular-nums">
-                  {cp.currency} · {cp.taxAuthority}
-                </p>
-              )}
-            </div>
-          )}
-        </Link>
+type SectionKey = "liquidity" | "operations" | "compliance";
 
-        {/* Nav */}
-        <SidebarNav items={visibleNav()} collapsed={collapsed} />
+export function Sidebar() {
+  const pathname = usePathname();
+  const { t, dir } = useI18n();
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
+    liquidity: true,
+    operations: true,
+    compliance: true,
+  });
 
-        {/* Collapse toggle */}
-        <div className="border-t p-1.5 shrink-0">
+  const toggle = (key: SectionKey) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const agents = [
+    { name: t.common.agentRaqib, color: "bg-emerald-500", badge: "Live", badgeClass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400", ping: true },
+    { name: t.common.agentMutawaqi, color: "bg-indigo-500", badge: "94% Acc", badgeClass: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400", ping: false },
+    { name: t.common.agentMustashar, color: "bg-amber-500", badge: "Ready", badgeClass: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400", ping: false },
+  ];
+
+  return (
+    <aside
+      dir={dir}
+      data-sidebar
+      className="hidden md:flex flex-col w-[260px] border-e bg-card shrink-0 print:hidden overflow-hidden"
+    >
+      {/* ── Brand + Entity Switcher ── */}
+      <div className="flex h-14 items-center border-b px-3 gap-2.5 shrink-0">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white font-bold text-xs">
+          T
+        </div>
+        <div className="flex flex-1 items-center justify-between min-w-0">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold truncate leading-tight">
+              Tadfuq<span className="text-emerald-600">.ai</span>
+            </p>
+          </div>
           <button
-            onClick={toggle}
-            className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors",
-              collapsed && "justify-center px-0"
-            )}
-            aria-label="Toggle sidebar"
+            type="button"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted transition-colors shrink-0"
           >
-            <CollapseIcon className="h-3.5 w-3.5 shrink-0" />
-            {!collapsed && (
-              <span>{isRtl ? "طي" : "Collapse"}</span>
-            )}
+            <span className="truncate max-w-[80px]">HQ Hub</span>
+            <ChevronDown className="h-3 w-3 shrink-0" />
           </button>
         </div>
-      </aside>
-    </TooltipProvider>
+      </div>
+
+      {/* ── Search ── */}
+      <div className="px-3 pt-3 pb-2 shrink-0">
+        <div className="relative">
+          <Search className="absolute start-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            placeholder={t.common.searchOrAsk}
+            className="w-full rounded-md border border-input bg-background pe-3 ps-9 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          />
+        </div>
+      </div>
+
+      {/* ── AI Agents Panel ── */}
+      <div className="px-3 pb-2 shrink-0">
+        <div className="rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/40 space-y-1.5">
+          {agents.map((agent) => (
+            <div key={agent.name} className="flex items-center justify-between min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2 w-2 shrink-0">
+                  {agent.ping && (
+                    <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-full opacity-75", agent.color)} />
+                  )}
+                  <span className={cn("relative inline-flex h-2 w-2 rounded-full", agent.color)} />
+                </span>
+                <span className="text-xs font-medium truncate">{agent.name}</span>
+              </div>
+              <span className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium shrink-0", agent.badgeClass)}>
+                {agent.badge}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Navigation ── */}
+      <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
+        <NavSection title={t.nav.sectionLiquidity} items={LIQUIDITY_CORE} pathname={pathname} nav={t.nav} open={openSections.liquidity} onToggle={() => toggle("liquidity")} />
+        <NavSection title={t.nav.sectionOperations} items={OPERATIONS} pathname={pathname} nav={t.nav} open={openSections.operations} onToggle={() => toggle("operations")} />
+        <NavSection title={t.nav.sectionCompliance} items={COMPLIANCE} pathname={pathname} nav={t.nav} open={openSections.compliance} onToggle={() => toggle("compliance")} />
+      </nav>
+    </aside>
   );
 }

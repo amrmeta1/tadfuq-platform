@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { getProfile } from "@/lib/api/tenant-api";
+import { DEV_SKIP_AUTH } from "@/lib/api/mock-data";
 import type { User } from "@/lib/api/types";
 
 export interface MeResult {
@@ -11,6 +12,8 @@ export interface MeResult {
   isLoading: boolean;
   isError: boolean;
 }
+
+const DEV_ROLES = ["tenant_admin", "owner"];
 
 export function useMe(): MeResult {
   const { data: session, status } = useSession();
@@ -21,10 +24,19 @@ export function useMe(): MeResult {
       const res = await getProfile();
       return res.data;
     },
-    enabled: status === "authenticated",
+    enabled: !DEV_SKIP_AUTH && status === "authenticated",
     staleTime: 5 * 60_000,
     retry: 1,
   });
+
+  if (DEV_SKIP_AUTH) {
+    return {
+      user: null,
+      roles: DEV_ROLES,
+      isLoading: false,
+      isError: false,
+    };
+  }
 
   const sessionRoles: string[] = session?.roles ?? [];
 

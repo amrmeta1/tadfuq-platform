@@ -27,9 +27,9 @@ const COMPANY_SIZES: { value: CompanySize; sub: string }[] = [
 ];
 
 const LOADING_PHRASES = [
-  "تخصيص العملة المحلية...",
-  "دمج قوانين الضرائب...",
-  "تفعيل وكلاء الذكاء الاصطناعي...",
+  { en: "Configuring local currency...", ar: "تخصيص العملة المحلية..." },
+  { en: "Integrating tax regulations...", ar: "دمج قوانين الضرائب..." },
+  { en: "Activating AI agents...", ar: "تفعيل وكلاء الذكاء الاصطناعي..." },
 ];
 
 // ── Slide variants ────────────────────────────────────────────────────────────
@@ -333,7 +333,7 @@ export default function OnboardingPage() {
                     transition={{ duration: 0.25 }}
                     className="text-sm text-muted-foreground"
                   >
-                    {LOADING_PHRASES[phraseIdx]}
+                    {isAr ? LOADING_PHRASES[phraseIdx].ar : LOADING_PHRASES[phraseIdx].en}
                   </motion.p>
                 </div>
 

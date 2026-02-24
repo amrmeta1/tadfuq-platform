@@ -28,38 +28,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
-
-const LINE_DATA = [
-  { day: "12 ديس", balance: 1_200_000 },
-  { day: "19 ديس", balance: -460_000 },
-  { day: "26 ديس", balance: 320_000 },
-  { day: "2 يناير", balance: 980_000 },
-  { day: "9 يناير", balance: 650_000 },
-  { day: "16 يناير", balance: 1_100_000 },
-];
-
-const BANK_ROWS = [
-  { label: "جميع الحسابات", wed: "16,787,545.78", thu: "11,511,633.24", thuNeg: false },
-  { label: "الحسابات الجارية", wed: "14,219,430.54", thu: "9,943,518.00", thuNeg: false },
-  { label: "Barclays", wed: "2,310,450.00", thu: "2,310,450.00", thuNeg: false },
-  { label: "EUR", wed: "1,876,200.00", thu: "-516,401.17", thuNeg: true },
-  { label: "HSBC", wed: "9,032,780.54", thu: "-2,924,197.96", thuNeg: true },
-];
-
-const TRANSACTIONS = [
-  { id: 1, name: "مورد UK", category: "موردين", amount: -1_250_000, type: "out" },
-  { id: 2, name: "فاتورة Ooredoo", category: "اتصالات", amount: -87_500, type: "out" },
-  { id: 3, name: "تحصيل عميل A", category: "مبيعات", amount: 2_100_000, type: "in" },
-  { id: 4, name: "رواتب الموظفين", category: "رواتب", amount: -980_000, type: "out" },
-  { id: 5, name: "دفعة موردين", category: "موردين", amount: -430_000, type: "out" },
-  { id: 6, name: "إيراد خدمات", category: "خدمات", amount: 768_115, type: "in" },
-  { id: 7, name: "إيجار مكتب", category: "مصروفات ثابتة", amount: -125_000, type: "out" },
-  { id: 8, name: "تحصيل ذمم", category: "مبيعات", amount: 450_000, type: "in" },
-  { id: 9, name: "فاتورة كهرباء", category: "مرافق", amount: -22_412, type: "out" },
-  { id: 10, name: "عمولة بنكية", category: "رسوم", amount: -3_500, type: "out" },
-];
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmtAbs(n: number): string {
@@ -77,11 +45,11 @@ function fmtFull(n: number, curr: string): string {
 
 // ── Custom tooltip ─────────────────────────────────────────────────────────────
 
-function LineTooltip({ active, payload, label, currency }: any) {
+function LineTooltip({ active, payload, label, currency, dir }: any) {
   if (!active || !payload?.length) return null;
   const val = payload[0]?.value as number;
   return (
-    <div dir="rtl" className="bg-popover border border-border shadow-sm rounded-lg p-3 text-xs min-w-[160px]">
+    <div dir={dir} className="bg-popover border border-border shadow-sm rounded-lg p-3 text-xs min-w-[160px]">
       <p className="font-semibold mb-1">{label}</p>
       <span dir="ltr" className={`font-mono font-medium tabular-nums ${val < 0 ? "text-destructive" : "text-emerald-600"}`} suppressHydrationWarning>
         {fmtFull(val, currency)}
@@ -93,10 +61,43 @@ function LineTooltip({ active, payload, label, currency }: any) {
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function CashPositioningPage() {
-  const { dir } = useI18n();
+  const { locale, dir } = useI18n();
+  const isAr = locale === "ar";
   const { profile } = useCompany();
   const curr = profile.currency || "SAR";
   const [activeTab, setActiveTab] = useState<"summary" | "calendar">("summary");
+
+  // ── Mock data (inside component so it can use isAr) ────────────────────────
+
+  const LINE_DATA = [
+    { day: isAr ? "12 ديس" : "12 Dec", balance: 1_200_000 },
+    { day: isAr ? "19 ديس" : "19 Dec", balance: -460_000 },
+    { day: isAr ? "26 ديس" : "26 Dec", balance: 320_000 },
+    { day: isAr ? "2 يناير" : "2 Jan", balance: 980_000 },
+    { day: isAr ? "9 يناير" : "9 Jan", balance: 650_000 },
+    { day: isAr ? "16 يناير" : "16 Jan", balance: 1_100_000 },
+  ];
+
+  const BANK_ROWS = [
+    { label: isAr ? "جميع الحسابات" : "All Accounts", wed: "16,787,545.78", thu: "11,511,633.24", thuNeg: false },
+    { label: isAr ? "الحسابات الجارية" : "Current Accounts", wed: "14,219,430.54", thu: "9,943,518.00", thuNeg: false },
+    { label: "Barclays", wed: "2,310,450.00", thu: "2,310,450.00", thuNeg: false },
+    { label: "EUR", wed: "1,876,200.00", thu: "-516,401.17", thuNeg: true },
+    { label: "HSBC", wed: "9,032,780.54", thu: "-2,924,197.96", thuNeg: true },
+  ];
+
+  const TRANSACTIONS = [
+    { id: 1, name: isAr ? "مورد UK" : "UK Supplier", category: isAr ? "موردين" : "Suppliers", amount: -1_250_000, type: "out" },
+    { id: 2, name: isAr ? "فاتورة Ooredoo" : "Ooredoo Invoice", category: isAr ? "اتصالات" : "Telecom", amount: -87_500, type: "out" },
+    { id: 3, name: isAr ? "تحصيل عميل A" : "Client A Collection", category: isAr ? "مبيعات" : "Sales", amount: 2_100_000, type: "in" },
+    { id: 4, name: isAr ? "رواتب الموظفين" : "Employee Salaries", category: isAr ? "رواتب" : "Payroll", amount: -980_000, type: "out" },
+    { id: 5, name: isAr ? "دفعة موردين" : "Supplier Payment", category: isAr ? "موردين" : "Suppliers", amount: -430_000, type: "out" },
+    { id: 6, name: isAr ? "إيراد خدمات" : "Service Revenue", category: isAr ? "خدمات" : "Services", amount: 768_115, type: "in" },
+    { id: 7, name: isAr ? "إيجار مكتب" : "Office Rent", category: isAr ? "مصروفات ثابتة" : "Fixed Expenses", amount: -125_000, type: "out" },
+    { id: 8, name: isAr ? "تحصيل ذمم" : "Receivables Collection", category: isAr ? "مبيعات" : "Sales", amount: 450_000, type: "in" },
+    { id: 9, name: isAr ? "فاتورة كهرباء" : "Electricity Bill", category: isAr ? "مرافق" : "Utilities", amount: -22_412, type: "out" },
+    { id: 10, name: isAr ? "عمولة بنكية" : "Bank Commission", category: isAr ? "رسوم" : "Fees", amount: -3_500, type: "out" },
+  ];
 
   return (
     <div dir={dir} className="flex flex-col lg:flex-row h-[calc(100vh-6rem)] gap-0 w-full max-w-[1800px] mx-auto overflow-hidden p-5 md:p-6 gap-6">
@@ -108,20 +109,23 @@ export default function CashPositioningPage() {
 
         {/* A. Header */}
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">تمركز السيولة <span className="text-muted-foreground font-normal text-lg">(Cash positioning)</span></h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isAr ? "تمركز السيولة" : "Cash Positioning"}{" "}
+            {isAr && <span className="text-muted-foreground font-normal text-lg">(Cash positioning)</span>}
+          </h1>
           <p className="text-sm text-muted-foreground mt-1">12 Dec 2025 → 18 Jan 2026</p>
 
           <div className="flex flex-wrap gap-2 mt-3">
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-              تخصيص التوقعات
+              {isAr ? "تخصيص التوقعات" : "Customize Forecasts"}
             </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
               <CheckSquare className="h-3.5 w-3.5" />
-              تعيين المعاملات
+              {isAr ? "تعيين المعاملات" : "Assign Transactions"}
             </Button>
             <Button size="sm" className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
               <Sparkles className="h-3.5 w-3.5" />
-              موازنة تلقائية
+              {isAr ? "موازنة تلقائية" : "Auto Balance"}
             </Button>
           </div>
 
@@ -129,15 +133,15 @@ export default function CashPositioningPage() {
             +16,787,545.78 <span className="text-xl font-semibold text-muted-foreground">{curr}</span>
           </p>
           <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
-            ↗ إجمالي الأرصدة البنكية
+            ↗ {isAr ? "إجمالي الأرصدة البنكية" : "Total Bank Balances"}
           </div>
 
           <div className="flex flex-wrap gap-2 mt-3">
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-              جميع الحسابات <ChevronDown className="h-3 w-3 opacity-60" />
+              {isAr ? "جميع الحسابات" : "All Accounts"} <ChevronDown className="h-3 w-3 opacity-60" />
             </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
-              جميع المعاملات <ChevronDown className="h-3 w-3 opacity-60" />
+              {isAr ? "جميع المعاملات" : "All Transactions"} <ChevronDown className="h-3 w-3 opacity-60" />
             </Button>
           </div>
         </div>
@@ -145,7 +149,9 @@ export default function CashPositioningPage() {
         {/* B. Line Chart */}
         <Card className="shadow-sm border-border/50 shrink-0">
           <CardContent className="p-4">
-            <p className="text-xs font-semibold text-muted-foreground mb-3">تطور الرصيد النقدي</p>
+            <p className="text-xs font-semibold text-muted-foreground mb-3">
+              {isAr ? "تطور الرصيد النقدي" : "Cash Balance Trend"}
+            </p>
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={LINE_DATA} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="currentColor" opacity={0.05} vertical={false} />
@@ -168,7 +174,7 @@ export default function CashPositioningPage() {
                     return String(v);
                   }}
                 />
-                <Tooltip content={<LineTooltip currency={curr} />} />
+                <Tooltip content={<LineTooltip currency={curr} dir={dir} />} />
 
                 {/* Danger floor */}
                 <ReferenceLine
@@ -181,11 +187,11 @@ export default function CashPositioningPage() {
 
                 {/* Today marker */}
                 <ReferenceLine
-                  x="19 ديس"
+                  x={isAr ? "19 ديس" : "19 Dec"}
                   stroke="#3b82f6"
                   strokeDasharray="4 4"
                   strokeWidth={1.5}
-                  label={{ value: "اليوم", position: "insideTopRight", fontSize: 10, fill: "#3b82f6" }}
+                  label={{ value: isAr ? "اليوم" : "Today", position: "insideTopRight", fontSize: 10, fill: "#3b82f6" }}
                 />
 
                 <Line
@@ -206,8 +212,8 @@ export default function CashPositioningPage() {
           {/* Tabs */}
           <div className="flex border-b shrink-0">
             {[
-              { key: "summary", label: "ملخص الأرصدة" },
-              { key: "calendar", label: "تقويم المعاملات" },
+              { key: "summary", label: isAr ? "ملخص الأرصدة" : "Balance Summary" },
+              { key: "calendar", label: isAr ? "تقويم المعاملات" : "Transaction Calendar" },
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -229,14 +235,14 @@ export default function CashPositioningPage() {
               <thead>
                 <tr className="border-b bg-muted/40">
                   <th className="sticky right-0 bg-muted/40 z-10 p-2 text-start font-semibold text-muted-foreground min-w-[160px] border-l">
-                    الحساب
+                    {isAr ? "الحساب" : "Account"}
                   </th>
                   <th className="p-2 text-end font-semibold text-muted-foreground min-w-[140px]">
-                    الأربعاء 18/12
+                    {isAr ? "الأربعاء 18/12" : "Wed 18/12"}
                   </th>
                   <th className="p-2 text-end font-semibold min-w-[140px] bg-blue-500/5 text-blue-700 dark:text-blue-400">
-                    الخميس 19/12
-                    <span className="block text-[9px] font-normal opacity-70">اليوم</span>
+                    {isAr ? "الخميس 19/12" : "Thu 19/12"}
+                    <span className="block text-[9px] font-normal opacity-70">{isAr ? "اليوم" : "Today"}</span>
                   </th>
                 </tr>
               </thead>
@@ -279,17 +285,17 @@ export default function CashPositioningPage() {
           </div>
           <div className="flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-[11px] font-medium text-destructive shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0" />
-            <span suppressHydrationWarning>سحب مكشوف مصرح به: 100,000.00 {curr}</span>
+            <span suppressHydrationWarning>{isAr ? "سحب مكشوف مصرح به" : "Authorized Overdraft"}: 100,000.00 {curr}</span>
           </div>
         </div>
 
         {/* B. 4 Micro KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 shrink-0">
           {[
-            { label: "رصيد افتتاحي", value: "-516,401.17", neg: true },
-            { label: "تدفق داخل", value: "+2,868,115.75", neg: false },
-            { label: "تدفق خارج", value: "-5,275,912.54", neg: true },
-            { label: "رصيد ختامي", value: "-2,924,197.96", neg: true },
+            { label: isAr ? "رصيد افتتاحي" : "Opening Balance", value: "-516,401.17", neg: true },
+            { label: isAr ? "تدفق داخل" : "Inflow", value: "+2,868,115.75", neg: false },
+            { label: isAr ? "تدفق خارج" : "Outflow", value: "-5,275,912.54", neg: true },
+            { label: isAr ? "رصيد ختامي" : "Closing Balance", value: "-2,924,197.96", neg: true },
           ].map((kpi) => (
             <div key={kpi.label} className="p-2 text-center rounded-lg border bg-card">
               <p className="text-[10px] text-muted-foreground font-medium leading-none mb-1.5">{kpi.label}</p>
@@ -302,7 +308,7 @@ export default function CashPositioningPage() {
 
         <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 w-full shrink-0">
           <RefreshCw className="h-3.5 w-3.5" />
-          إنشاء تحويل موازنة (Create balancing transfer)
+          {isAr ? "إنشاء تحويل موازنة" : "Create Balancing Transfer"}
         </Button>
 
         {/* C. Transaction list */}
@@ -312,12 +318,12 @@ export default function CashPositioningPage() {
             <div className="relative flex-1">
               <Search className="absolute start-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="بحث في المعاملات..."
+                placeholder={isAr ? "بحث في المعاملات..." : "Search transactions..."}
                 className="h-8 ps-8 text-xs"
               />
             </div>
             <Button variant="outline" size="sm" className="h-8 text-xs gap-1 shrink-0">
-              جميع الأنواع <ChevronDown className="h-3 w-3 opacity-60" />
+              {isAr ? "جميع الأنواع" : "All Types"} <ChevronDown className="h-3 w-3 opacity-60" />
             </Button>
           </div>
 

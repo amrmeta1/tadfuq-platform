@@ -6,6 +6,31 @@
 export const MOCKS_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
 
+export const DEV_SKIP_AUTH =
+  process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === "true";
+
+// ── Dev skip-login: mock tenant list (no backend) ─────────────
+import type { Tenant } from "./types";
+
+export function getMockTenantList(): { data: Tenant[]; meta: { total: number; limit: number; offset: number } } {
+  const now = new Date().toISOString();
+  return {
+    data: [
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "Dev Company",
+        slug: "dev-company",
+        plan: "starter",
+        status: "active",
+        metadata: null,
+        created_at: now,
+        updated_at: now,
+      },
+    ],
+    meta: { total: 1, limit: 20, offset: 0 },
+  };
+}
+
 // ── Forecast ─────────────────────────────────────────────────
 
 function generateForecastData(days: number, scenario: string) {

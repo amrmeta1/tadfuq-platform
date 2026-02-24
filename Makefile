@@ -1,4 +1,4 @@
-.PHONY: up down run run-ingestion run-worker build build-ingestion test lint migrate migrate-down migrate-create fmt vet docker-build docker-build-ingestion gen help up-deps
+.PHONY: up down run run-ingestion run-worker build build-ingestion test lint migrate migrate-down migrate-create fmt vet docker-build docker-build-ingestion gen help up-deps run-all
 
 # ──────────────────────────────────────────────
 # CashFlow.ai – Monorepo Makefile
@@ -22,6 +22,9 @@ down: ## Stop and remove all containers
 
 up-deps: ## Start infra only (postgres, keycloak, nats, rabbitmq)
 	$(DOCKER_COMPOSE) up -d postgres keycloak nats rabbitmq
+
+run-all: ## Start full stack (Docker infra + migrate + frontend). Frontend uses DEV_SKIP_AUTH for no-login.
+	@chmod +x scripts/run-all.sh 2>/dev/null; ./scripts/run-all.sh
 
 run: ## Run tenant-service locally
 	go run ./cmd/tenant-service

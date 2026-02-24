@@ -16,19 +16,6 @@ const MasterForecastChart = dynamic(
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 
-const CHART_DATA: CashflowMonthPoint[] = [
-  { month: "فبراير", inflow: 920_000,  outflow: 710_000,  balance: 2_310_000 },
-  { month: "مارس",   inflow: 1_050_000, outflow: 830_000, balance: 2_530_000 },
-  { month: "أبريل",  inflow: 980_000,  outflow: 760_000,  balance: 2_750_000, isCurrent: true },
-  { month: "مايو",   inflowFuture: 1_100_000, outflowFuture: 870_000,  balanceForecast: 2_980_000 },
-  { month: "يونيو",  inflowFuture: 1_050_000, outflowFuture: 920_000,  balanceForecast: 3_110_000 },
-  { month: "يوليو",  inflowFuture: 1_200_000, outflowFuture: 850_000,  balanceForecast: 3_460_000 },
-  { month: "أغسطس", inflowFuture: 1_150_000, outflowFuture: 990_000,  balanceForecast: 3_620_000 },
-  { month: "سبتمبر", inflowFuture: 1_300_000, outflowFuture: 1_010_000, balanceForecast: 3_910_000 },
-  { month: "أكتوبر", inflowFuture: 1_250_000, outflowFuture: 960_000,  balanceForecast: 4_200_000 },
-];
-
-// Grid data rows
 type GridRow = {
   label: string;
   icon: string;
@@ -39,51 +26,73 @@ type GridRow = {
   values: (number | null)[];
 };
 
-const MONTHS = ["فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر"];
-const CURRENT_MONTH_IDX = 2; // أبريل
+const CURRENT_MONTH_IDX = 2;
 
-const GRID_ROWS: GridRow[] = [
-  {
-    label: "الرصيد بداية الشهر",
-    icon: "●", color: "text-blue-500", bold: true,
-    values: [2_100_000, 2_310_000, 2_530_000, 2_750_000, 2_980_000, 3_110_000, 3_460_000, 3_620_000, 3_910_000],
-  },
-  {
-    label: "التدفقات الداخلة",
-    icon: "▲", color: "text-emerald-600", bold: true,
-    values: [920_000, 1_050_000, 980_000, 1_100_000, 1_050_000, 1_200_000, 1_150_000, 1_300_000, 1_250_000],
-  },
-  {
-    label: "مبيعات التجزئة",
-    icon: "", color: "text-muted-foreground", indent: true,
-    values: [540_000, 620_000, 580_000, 650_000, 620_000, 710_000, 680_000, 770_000, 740_000],
-  },
-  {
-    label: "تحصيل ذمم",
-    icon: "", color: "text-muted-foreground", indent: true,
-    values: [380_000, 430_000, 400_000, 450_000, 430_000, 490_000, 470_000, 530_000, 510_000],
-  },
-  {
-    label: "التدفقات الخارجة",
-    icon: "▼", color: "text-rose-600", bold: true,
-    values: [710_000, 830_000, 760_000, 870_000, 920_000, 850_000, 990_000, 1_010_000, 960_000],
-  },
-  {
-    label: "رواتب",
-    icon: "", color: "text-muted-foreground", indent: true,
-    values: [320_000, 320_000, 320_000, 320_000, 320_000, 320_000, 320_000, 320_000, 320_000],
-  },
-  {
-    label: "موردين",
-    icon: "", color: "text-muted-foreground", indent: true,
-    values: [390_000, 510_000, 440_000, 550_000, 600_000, 530_000, 670_000, 690_000, 640_000],
-  },
-  {
-    label: "الرصيد نهاية الشهر",
-    icon: "◆", color: "text-foreground", bold: true, muted: true,
-    values: [2_310_000, 2_530_000, 2_750_000, 2_980_000, 3_110_000, 3_460_000, 3_620_000, 3_910_000, 4_200_000],
-  },
-];
+function getMonths(isAr: boolean): string[] {
+  return isAr
+    ? ["فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر"]
+    : ["February", "March", "April", "May", "June", "July", "August", "September", "October"];
+}
+
+function getChartData(isAr: boolean): CashflowMonthPoint[] {
+  const m = getMonths(isAr);
+  return [
+    { month: m[0], inflow: 920_000,  outflow: 710_000,  balance: 2_310_000 },
+    { month: m[1], inflow: 1_050_000, outflow: 830_000, balance: 2_530_000 },
+    { month: m[2], inflow: 980_000,  outflow: 760_000,  balance: 2_750_000, isCurrent: true },
+    { month: m[3], inflowFuture: 1_100_000, outflowFuture: 870_000,  balanceForecast: 2_980_000 },
+    { month: m[4], inflowFuture: 1_050_000, outflowFuture: 920_000,  balanceForecast: 3_110_000 },
+    { month: m[5], inflowFuture: 1_200_000, outflowFuture: 850_000,  balanceForecast: 3_460_000 },
+    { month: m[6], inflowFuture: 1_150_000, outflowFuture: 990_000,  balanceForecast: 3_620_000 },
+    { month: m[7], inflowFuture: 1_300_000, outflowFuture: 1_010_000, balanceForecast: 3_910_000 },
+    { month: m[8], inflowFuture: 1_250_000, outflowFuture: 960_000,  balanceForecast: 4_200_000 },
+  ];
+}
+
+function getGridRows(isAr: boolean): GridRow[] {
+  return [
+    {
+      label: isAr ? "الرصيد بداية الشهر" : "Opening Balance",
+      icon: "●", color: "text-blue-500", bold: true,
+      values: [2_100_000, 2_310_000, 2_530_000, 2_750_000, 2_980_000, 3_110_000, 3_460_000, 3_620_000, 3_910_000],
+    },
+    {
+      label: isAr ? "التدفقات الداخلة" : "Cash Inflows",
+      icon: "▲", color: "text-emerald-600", bold: true,
+      values: [920_000, 1_050_000, 980_000, 1_100_000, 1_050_000, 1_200_000, 1_150_000, 1_300_000, 1_250_000],
+    },
+    {
+      label: isAr ? "مبيعات التجزئة" : "Retail Sales",
+      icon: "", color: "text-muted-foreground", indent: true,
+      values: [540_000, 620_000, 580_000, 650_000, 620_000, 710_000, 680_000, 770_000, 740_000],
+    },
+    {
+      label: isAr ? "تحصيل ذمم" : "Receivables",
+      icon: "", color: "text-muted-foreground", indent: true,
+      values: [380_000, 430_000, 400_000, 450_000, 430_000, 490_000, 470_000, 530_000, 510_000],
+    },
+    {
+      label: isAr ? "التدفقات الخارجة" : "Cash Outflows",
+      icon: "▼", color: "text-rose-600", bold: true,
+      values: [710_000, 830_000, 760_000, 870_000, 920_000, 850_000, 990_000, 1_010_000, 960_000],
+    },
+    {
+      label: isAr ? "رواتب" : "Salaries",
+      icon: "", color: "text-muted-foreground", indent: true,
+      values: [320_000, 320_000, 320_000, 320_000, 320_000, 320_000, 320_000, 320_000, 320_000],
+    },
+    {
+      label: isAr ? "موردين" : "Suppliers",
+      icon: "", color: "text-muted-foreground", indent: true,
+      values: [390_000, 510_000, 440_000, 550_000, 600_000, 530_000, 670_000, 690_000, 640_000],
+    },
+    {
+      label: isAr ? "الرصيد نهاية الشهر" : "Closing Balance",
+      icon: "◆", color: "text-foreground", bold: true, muted: true,
+      values: [2_310_000, 2_530_000, 2_750_000, 2_980_000, 3_110_000, 3_460_000, 3_620_000, 3_910_000, 4_200_000],
+    },
+  ];
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -125,9 +134,14 @@ function KpiCard({
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function ForecastPage() {
-  const { dir } = useI18n();
+  const { locale, dir } = useI18n();
   const { profile } = useCompany();
   const curr = profile.currency || "SAR";
+  const isAr = locale === "ar";
+
+  const months = getMonths(isAr);
+  const chartData = getChartData(isAr);
+  const gridRows = getGridRows(isAr);
 
   return (
     <div dir={dir} className="flex flex-col gap-5 p-5 md:p-6 overflow-y-auto h-full">
@@ -136,10 +150,10 @@ export default function ForecastPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div className="flex flex-wrap items-center gap-2">
           {[
-            "كل المشاريع",
-            "يناير ← ديسمبر",
-            "السيناريو الأساسي",
-            "عرض مجمع",
+            isAr ? "كل المشاريع" : "All Projects",
+            isAr ? "يناير ← ديسمبر" : "January → December",
+            isAr ? "السيناريو الأساسي" : "Base Scenario",
+            isAr ? "عرض مجمع" : "Aggregated View",
           ].map((label) => (
             <Button key={label} variant="outline" size="sm" className="h-8 text-xs gap-1.5 font-medium">
               {label}
@@ -150,11 +164,11 @@ export default function ForecastPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />
-            تحديث الحساب
+            {isAr ? "تحديث الحساب" : "Recalculate"}
           </Button>
           <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
             <Settings2 className="h-3.5 w-3.5" />
-            خيارات
+            {isAr ? "خيارات" : "Options"}
           </Button>
         </div>
       </div>
@@ -166,7 +180,7 @@ export default function ForecastPage() {
         <div className="w-full xl:w-[280px] shrink-0 flex flex-col gap-3">
           <KpiCard
             value="3,088,421"
-            label="الرصيد النقدي (Cash balance)"
+            label={isAr ? "الرصيد النقدي" : "Cash Balance"}
             dotColor="bg-blue-500"
             gradient="bg-gradient-to-br from-blue-50/70 to-transparent dark:from-blue-950/20"
             curr={curr}
@@ -174,21 +188,21 @@ export default function ForecastPage() {
           />
           <KpiCard
             value="820,000"
-            label="تسويات (Adjustment)"
+            label={isAr ? "تسويات" : "Adjustments"}
             dotColor="bg-violet-500"
             curr={curr}
             icon={ArrowUpCircle}
           />
           <KpiCard
             value="625,000"
-            label="استثمارات (Investments)"
+            label={isAr ? "استثمارات" : "Investments"}
             dotColor="bg-teal-500"
             curr={curr}
             icon={TrendingUp}
           />
           <KpiCard
             value="1,497,600"
-            label="الإجمالي (Total)"
+            label={isAr ? "الإجمالي" : "Total"}
             dotColor="bg-zinc-500"
             gradient="bg-muted/30"
             curr={curr}
@@ -203,25 +217,35 @@ export default function ForecastPage() {
           <div className="h-auto p-4 border-b relative">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <p className="text-sm font-semibold">عرض التدفق النقدي الرئيسي</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Master Cashflow View · فبراير — أكتوبر</p>
+                <p className="text-sm font-semibold">
+                  {isAr ? "عرض التدفق النقدي الرئيسي" : "Master Cashflow View"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isAr
+                    ? "Master Cashflow View · فبراير — أكتوبر"
+                    : "Master Cashflow View · February — October"}
+                </p>
               </div>
               <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: "#34d399" }} />فعلي
+                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: "#34d399" }} />
+                  {isAr ? "فعلي" : "Actual"}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ border: "2px solid #34d399" }} />متوقع
+                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ border: "2px solid #34d399" }} />
+                  {isAr ? "متوقع" : "Forecast"}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-5 shrink-0" style={{ borderTop: "2px solid #818cf8" }} />الرصيد
+                  <span className="w-5 shrink-0" style={{ borderTop: "2px solid #818cf8" }} />
+                  {isAr ? "الرصيد" : "Balance"}
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="w-5 shrink-0" style={{ borderTop: "2px dashed #818cf8" }} />توقع الرصيد
+                  <span className="w-5 shrink-0" style={{ borderTop: "2px dashed #818cf8" }} />
+                  {isAr ? "توقع الرصيد" : "Forecast Balance"}
                 </span>
               </div>
             </div>
-            <MasterForecastChart data={CHART_DATA} currency={curr} />
+            <MasterForecastChart data={chartData} currency={curr} />
           </div>
 
           {/* Synced Data Grid */}
@@ -229,11 +253,12 @@ export default function ForecastPage() {
             <table className="w-full border-collapse min-w-[900px]">
               <thead>
                 <tr className="border-b bg-muted/40">
-                  {/* Sticky label header */}
                   <th className="sticky right-0 bg-muted/40 z-10 w-[120px] min-w-[120px] max-w-[120px] border-l shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] p-2 text-start">
-                    <span className="text-[11px] font-semibold text-muted-foreground">البند</span>
+                    <span className="text-[11px] font-semibold text-muted-foreground">
+                      {isAr ? "البند" : "Item"}
+                    </span>
                   </th>
-                  {MONTHS.map((m, i) => (
+                  {months.map((m, i) => (
                     <th
                       key={m}
                       className={`p-2 text-end text-[11px] font-semibold min-w-[90px] ${
@@ -244,19 +269,20 @@ export default function ForecastPage() {
                     >
                       {m}
                       {i === CURRENT_MONTH_IDX && (
-                        <span className="block text-[9px] font-normal opacity-70">الشهر الحالي</span>
+                        <span className="block text-[9px] font-normal opacity-70">
+                          {isAr ? "الشهر الحالي" : "Current Month"}
+                        </span>
                       )}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {GRID_ROWS.map((row, ri) => (
+                {gridRows.map((row, ri) => (
                   <tr
                     key={ri}
                     className={`border-b transition-colors hover:bg-muted/30 ${row.muted ? "bg-muted/20" : ""}`}
                   >
-                    {/* Sticky label cell */}
                     <td className={`sticky right-0 z-10 border-l shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] p-2 bg-card w-[120px] min-w-[120px] max-w-[120px] ${row.muted ? "bg-muted/20" : ""}`}>
                       <div className={`flex items-center gap-1.5 ${row.indent ? "ps-5" : ""}`}>
                         {row.icon && (
@@ -273,9 +299,13 @@ export default function ForecastPage() {
                         className={`p-2 text-end text-[12px] tabular-nums ${
                           ci === CURRENT_MONTH_IDX ? "bg-blue-500/5" : ""
                         } ${row.bold ? "font-semibold" : "text-muted-foreground"} ${
-                          row.label.includes("خارجة") || row.label === "رواتب" || row.label === "موردين"
+                          row.color === "text-rose-600"
+                          || row.label === "رواتب" || row.label === "Salaries"
+                          || row.label === "موردين" || row.label === "Suppliers"
                             ? "text-rose-600 dark:text-rose-400"
-                            : row.label.includes("داخلة") || row.label === "مبيعات التجزئة" || row.label === "تحصيل ذمم"
+                            : row.color === "text-emerald-600"
+                            || row.label === "مبيعات التجزئة" || row.label === "Retail Sales"
+                            || row.label === "تحصيل ذمم" || row.label === "Receivables"
                             ? "text-emerald-600 dark:text-emerald-400"
                             : ""
                         }`}

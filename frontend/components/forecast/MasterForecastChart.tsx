@@ -12,6 +12,7 @@ import {
   ReferenceArea,
   Legend,
 } from "recharts";
+import { useI18n } from "@/lib/i18n/context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,11 +62,11 @@ function fmtValue(n: number | null | undefined): string {
   return `${sign}${abs.toLocaleString()}`;
 }
 
-function ChartTooltip({ active, payload, label, currency }: any) {
+function ChartTooltip({ active, payload, label, currency, isAr }: any) {
   if (!active || !payload?.length) return null;
   const rows = payload.filter((p: any) => p.value != null && p.value !== 0);
   return (
-    <div dir="rtl" className="bg-popover text-popover-foreground border border-border shadow-sm rounded-lg p-3 min-w-[210px]">
+    <div dir={isAr ? "rtl" : "ltr"} className="bg-popover text-popover-foreground border border-border shadow-sm rounded-lg p-3 min-w-[210px]">
       <p className="font-semibold text-sm mb-2 pb-1.5 border-b border-border">{label}</p>
       <div className="space-y-1.5">
         {rows.map((p: any) => (
@@ -87,9 +88,14 @@ function ChartTooltip({ active, payload, label, currency }: any) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MasterForecastChart({ data, currency }: MasterForecastChartProps) {
+  const { locale } = useI18n();
+  const isAr = locale === "ar";
+
+  const currentMonth = data.find((d) => d.isCurrent)?.month;
+
   return (
     <ResponsiveContainer width="100%" height={350}>
-      <ComposedChart data={data} margin={{ top: 8, right: 0, left: 16, bottom: 0 }} barGap={2}>
+      <ComposedChart data={data} margin={{ top: 8, right: isAr ? 0 : 16, left: isAr ? 16 : 0, bottom: 0 }} barGap={2}>
         <defs>
           {/* Diagonal stripe — green (future inflow) */}
           <pattern id="stripeGreen" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
@@ -103,20 +109,22 @@ export function MasterForecastChart({ data, currency }: MasterForecastChartProps
           </pattern>
         </defs>
 
-        {/* Current month highlight */}
-        <ReferenceArea x1="أبريل" x2="أبريل" fill="#3b82f6" fillOpacity={0.07} />
+        {/* Current month highlight — derived from data instead of hardcoded */}
+        {currentMonth && (
+          <ReferenceArea x1={currentMonth} x2={currentMonth} fill="#3b82f6" fillOpacity={0.07} />
+        )}
 
         <CartesianGrid stroke="currentColor" opacity={0.05} vertical={false} />
 
         <XAxis
           dataKey="month"
-          reversed={true}
+          reversed={isAr}
           tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          orientation="right"
+          orientation={isAr ? "right" : "left"}
           width={120}
           tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
           axisLine={false}
@@ -130,7 +138,7 @@ export function MasterForecastChart({ data, currency }: MasterForecastChartProps
           }}
         />
 
-        <Tooltip content={<ChartTooltip currency={currency} />} />
+        <Tooltip content={<ChartTooltip currency={currency} isAr={isAr} />} />
 
         <Legend
           iconType="circle"
@@ -139,18 +147,18 @@ export function MasterForecastChart({ data, currency }: MasterForecastChartProps
         />
 
         {/* Past bars — solid */}
-        <Bar dataKey="inflow"  name="إيرادات فعلية"  fill="#34d399" radius={[3, 3, 0, 0]} maxBarSize={32} />
-        <Bar dataKey="outflow" name="مصروفات فعلية" fill="#fb7185" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="inflow"  name={isAr ? "إيرادات فعلية" : "Actual Inflow"}  fill="#34d399" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="outflow" name={isAr ? "مصروفات فعلية" : "Actual Outflow"} fill="#fb7185" radius={[3, 3, 0, 0]} maxBarSize={32} />
 
         {/* Future bars — striped */}
-        <Bar dataKey="inflowFuture"  name="إيرادات متوقعة"  fill="url(#stripeGreen)" radius={[3, 3, 0, 0]} maxBarSize={32} />
-        <Bar dataKey="outflowFuture" name="مصروفات متوقعة" fill="url(#stripeRed)"   radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="inflowFuture"  name={isAr ? "إيرادات متوقعة" : "Forecasted Inflow"}  fill="url(#stripeGreen)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+        <Bar dataKey="outflowFuture" name={isAr ? "مصروفات متوقعة" : "Forecasted Outflow"} fill="url(#stripeRed)"   radius={[3, 3, 0, 0]} maxBarSize={32} />
 
         {/* Past balance — solid blue */}
         <Line
           type="monotone"
           dataKey="balance"
-          name="الرصيد الفعلي"
+          name={isAr ? "الرصيد الفعلي" : "Actual Balance"}
           stroke="#818cf8"
           strokeWidth={2.5}
           dot={{ r: 3.5, fill: "var(--background)", stroke: "#818cf8", strokeWidth: 2 }}
@@ -162,7 +170,7 @@ export function MasterForecastChart({ data, currency }: MasterForecastChartProps
         <Line
           type="monotone"
           dataKey="balanceForecast"
-          name="الرصيد المتوقع"
+          name={isAr ? "الرصيد المتوقع" : "Forecasted Balance"}
           stroke="#818cf8"
           strokeWidth={2.5}
           strokeDasharray="5 5"
