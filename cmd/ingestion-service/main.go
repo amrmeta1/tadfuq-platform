@@ -16,6 +16,7 @@ import (
 	httpAdapter "github.com/finch-co/cashflow/internal/adapter/http"
 	"github.com/finch-co/cashflow/internal/adapter/integrations"
 	"github.com/finch-co/cashflow/internal/adapter/mq"
+	"github.com/finch-co/cashflow/internal/adapter/worker"
 	"github.com/finch-co/cashflow/internal/auth"
 	"github.com/finch-co/cashflow/internal/config"
 	"github.com/finch-co/cashflow/internal/observability"
@@ -84,6 +85,7 @@ func run() error {
 	bankTxnRepo := db.NewBankTransactionRepo(pool)
 	jobRepo := db.NewIngestionJobRepo(pool)
 	idempotencyRepo := db.NewIdempotencyRepo(pool)
+	analysisRepo := db.NewAnalysisRepo(pool)
 
 	// Init use cases
 	ingestionUC := usecase.NewIngestionUseCase(
@@ -94,9 +96,11 @@ func run() error {
 		idempotencyRepo,
 		publisher,
 	)
+	analysisUC := usecase.NewAnalysisUseCase(analysisRepo)
 
-	// Init HTTP handler
-	ingestionHandler := httpAdapter.NewIngestionHandler(ingestionUC)
+	// Init HTTP handlers
+	ingestionHandler := httpAdapter.NewIngestionHandler(ingestionUC, publisher)
+	analysisHandler := httpAdapter.NewAnalysisHandler(analysisUC, analysisRepo)
 
 	// Build router
 	router := httpAdapter.NewIngestionRouter(httpAdapter.IngestionRouterDeps{
@@ -104,6 +108,7 @@ func run() error {
 		Users:     userRepo,
 		AuditRepo: auditRepo,
 		Ingestion: ingestionHandler,
+		Analysis:  analysisHandler,
 	})
 
 	// Start command consumer (background goroutine)
@@ -128,6 +133,23 @@ func run() error {
 	go func() {
 		if err := consumer.Start(ctx); err != nil {
 			log.Error().Err(err).Msg("command consumer error")
+		}
+	}()
+
+	// Start analysis consumer (runs analysis on analysis.requested events)
+	analysisCh, err := rmqConn.Channel()
+	if err != nil {
+		return fmt.Errorf("opening analysis consumer channel: %w", err)
+	}
+	defer analysisCh.Close()
+	if err := analysisCh.Qos(cfg.RabbitMQ.PrefetchCount, 0, false); err != nil {
+		return fmt.Errorf("setting analysis consumer QoS: %w", err)
+	}
+	analysisMsgHandler := worker.NewAnalysisMessageHandler(analysisUC, publisher)
+	analysisConsumer := mq.NewConsumer(analysisCh, mq.QueueAnalysisRequested, analysisMsgHandler)
+	go func() {
+		if err := analysisConsumer.Start(ctx); err != nil {
+			log.Error().Err(err).Msg("analysis consumer error")
 		}
 	}()
 

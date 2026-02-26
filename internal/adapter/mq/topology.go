@@ -23,12 +23,23 @@ const (
 	RKIngestionSyncAccounting = "ingestion.sync_accounting"
 	RKCategorizationRun       = "categorization.run"
 	RKCashflowRecompute       = "cashflow.recompute"
+
+	// Analysis events
+	RKAnalysisRequested = "cashflow.analysis.requested"
+	RKAnalysisCompleted = "cashflow.analysis.completed"
+)
+
+// Event type constants (for envelope EventType and routing)
+const (
+	EventAnalysisRequested = "cashflow.analysis.requested"
+	EventAnalysisCompleted = "cashflow.analysis.completed"
 )
 
 // Queue names
 const (
 	QueueTransactionsIngested = "q.cashflow.transactions.ingested"
 	QueueCommandsIngestion    = "q.cashflow.commands.ingestion"
+	QueueAnalysisRequested    = "q.cashflow.analysis.requested"
 	QueueRetry5s              = "q.cashflow.retry.5s"
 	QueueRetry30s             = "q.cashflow.retry.30s"
 	QueueDLQ                  = "q.cashflow.dlq"
@@ -91,6 +102,12 @@ func DeclareTopology(ch *amqp.Channel, retryTTL5s, retryTTL30s int) error {
 	}
 	if err := ch.QueueBind(QueueTransactionsIngested, RKTransactionsIngested, ExchangeEvents, false, nil); err != nil {
 		return fmt.Errorf("binding transactions.ingested: %w", err)
+	}
+	if _, err := ch.QueueDeclare(QueueAnalysisRequested, true, false, false, false, txnQueueArgs); err != nil {
+		return fmt.Errorf("declaring analysis.requested queue: %w", err)
+	}
+	if err := ch.QueueBind(QueueAnalysisRequested, RKAnalysisRequested, ExchangeEvents, false, nil); err != nil {
+		return fmt.Errorf("binding analysis.requested: %w", err)
 	}
 
 	// ── Command queues ───────────────────────────

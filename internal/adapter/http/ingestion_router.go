@@ -17,6 +17,7 @@ type IngestionRouterDeps struct {
 	Users     domain.UserRepository
 	AuditRepo domain.AuditLogRepository
 	Ingestion *IngestionHandler
+	Analysis  *AnalysisHandler
 }
 
 // NewIngestionRouter builds the chi router for the ingestion service.
@@ -59,6 +60,10 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 			// Sync commands
 			r.Post("/sync/bank", deps.Ingestion.SyncBank)
 			r.Post("/sync/accounting", deps.Ingestion.SyncAccounting)
+
+			// Cash analysis (run and get latest)
+			r.With(middleware.RequirePermission(auth.PermIngestionRead)).Get("/analysis/latest", deps.Analysis.GetLatest)
+			r.With(middleware.RequirePermission(auth.PermIngestionRead)).Post("/analysis/run", deps.Analysis.RunAnalysis)
 		})
 	})
 

@@ -8,19 +8,22 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
+	"github.com/finch-co/cashflow/internal/adapter/mq"
 	"github.com/finch-co/cashflow/internal/domain"
 	"github.com/finch-co/cashflow/internal/usecase"
 )
 
 // IngestionHandler handles HTTP requests for the ingestion service.
 type IngestionHandler struct {
-	uc *usecase.IngestionUseCase
+	uc        *usecase.IngestionUseCase
+	publisher *mq.Publisher
 }
 
 // NewIngestionHandler creates a new ingestion handler.
-func NewIngestionHandler(uc *usecase.IngestionUseCase) *IngestionHandler {
-	return &IngestionHandler{uc: uc}
+func NewIngestionHandler(uc *usecase.IngestionUseCase, publisher *mq.Publisher) *IngestionHandler {
+	return &IngestionHandler{uc: uc, publisher: publisher}
 }
 
 // ImportBankCSV handles POST /tenants/{tenantId}/imports/bank-csv
@@ -61,6 +64,19 @@ func (h *IngestionHandler) ImportBankCSV(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeErrorResponse(w, err)
 		return
+	}
+
+	// Auto-trigger analysis after successful CSV import
+	payload := map[string]interface{}{
+		"tenant_id":         tenantID.String(),
+		"transaction_count": result.Inserted,
+		"triggered_at":      time.Now().UTC(),
+	}
+	env, envErr := mq.NewEnvelope(mq.EventAnalysisRequested, tenantID.String(), payload)
+	if envErr != nil {
+		log.Warn().Err(envErr).Str("tenant_id", tenantID.String()).Msg("failed to create analysis envelope")
+	} else if pubErr := h.publisher.PublishEvent(r.Context(), mq.RKAnalysisRequested, env); pubErr != nil {
+		log.Warn().Err(pubErr).Str("tenant_id", tenantID.String()).Msg("failed to publish analysis.requested")
 	}
 
 	writeJSON(w, http.StatusOK, result)
