@@ -72,10 +72,13 @@ export interface CompanyProfile {
 
 interface CompanyContextValue {
   profile: CompanyProfile;
+  /** In-memory override when in client demo mode; not persisted */
+  demoOverride: Partial<CompanyProfile> | null;
   isHydrated: boolean;
   updateCompanyProfile: (updates: Partial<CompanyProfile>) => void;
   setCountry: (code: CountryCode) => void;
   resetProfile: () => void;
+  setDemoOverride: (override: Partial<CompanyProfile> | null) => void;
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -122,7 +125,14 @@ const CompanyContext = createContext<CompanyContextValue | null>(null);
 
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<CompanyProfile>(DEFAULT_PROFILE);
+  const [demoOverride, setDemoOverrideState] = useState<Partial<CompanyProfile> | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
+
+  const setDemoOverride = useCallback((override: Partial<CompanyProfile> | null) => {
+    setDemoOverrideState(override);
+  }, []);
+
+  const effectiveProfile = demoOverride ? { ...profile, ...demoOverride } : profile;
 
   // Hydrate from localStorage on mount (client-only)
   useEffect(() => {
@@ -156,6 +166,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
   const resetProfile = useCallback(() => {
     setProfile(DEFAULT_PROFILE);
+    setDemoOverrideState(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -163,7 +174,15 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <CompanyContext.Provider
-      value={{ profile, isHydrated, updateCompanyProfile, setCountry, resetProfile }}
+      value={{
+        profile: effectiveProfile,
+        demoOverride,
+        isHydrated,
+        updateCompanyProfile,
+        setCountry,
+        resetProfile,
+        setDemoOverride,
+      }}
     >
       {children}
     </CompanyContext.Provider>

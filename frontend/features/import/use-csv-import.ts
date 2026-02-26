@@ -86,15 +86,89 @@ export const GCC_MOCK_ROWS: ImportRow[] = [
 // ── Terminal feed strings ─────────────────────────────────────────────────────
 
 const TERMINAL_LINES = [
-  "Mustashar AI is scanning 142 rows...",
-  "Cleaning messy merchant names...",
-  "Mapping 'POS PUR STC' → 'IT & Software'...",
-  "Mapping 'SADAD BILL KAHRAMAA' → 'Utilities'...",
-  "Detecting ZATCA VAT payment pattern...",
-  "Calculating confidence scores...",
-  "Deduplicating against existing ledger...",
-  "Auto-categorization complete. 98.6% accuracy.",
+  "Scanning rows...",
+  "Cleaning merchant names...",
+  "Mapping categories...",
+  "Calculating confidence...",
+  "Analysis complete.",
 ];
+
+// ── Parse CSV (handles quoted fields and common bank columns) ─────────────────
+
+function parseCSVLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      inQuotes = !inQuotes;
+    } else if ((c === "," && !inQuotes) || (c === "\t" && !inQuotes)) {
+      out.push(cur.trim());
+      cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseAmount(val: string): number {
+  const cleaned = String(val).replace(/\s/g, "").replace(/,/g, ".").replace(/[^\d.-]/g, "");
+  const n = parseFloat(cleaned);
+  if (Number.isNaN(n)) return 0;
+  return n;
+}
+
+/** Find column index by header (case-insensitive, common EN/AR names) */
+function findColumnIndex(headers: string[], ...names: string[]): number {
+  const lower = headers.map((h) => h.toLowerCase().trim());
+  const searchTerms = names.map((n) => n.toLowerCase().trim());
+  return lower.findIndex((h) =>
+    searchTerms.some((term) => h.includes(term) || term.includes(h))
+  );
+}
+
+export function parseCSVToImportRows(csvText: string, defaultCurrency = "SAR"): ImportRow[] {
+  const lines = csvText.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+
+  const headers = parseCSVLine(lines[0]);
+  const dateIdx = findColumnIndex(headers, "date", "تاريخ", "posting", "value date");
+  const amountIdx = findColumnIndex(headers, "amount", "مبلغ", "balance", "credit", "debit");
+  const creditIdx = findColumnIndex(headers, "credit", "دائن");
+  const debitIdx = findColumnIndex(headers, "debit", "مدين");
+  const descIdx = findColumnIndex(headers, "description", "details", "narration", "وصف", "تفاصيل", "text");
+
+  const rows: ImportRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCSVLine(lines[i]);
+    if (cells.length < 2) continue;
+    const date = dateIdx >= 0 ? cells[dateIdx]?.slice(0, 10) ?? "" : "";
+    let amount = 0;
+    if (amountIdx >= 0) {
+      amount = parseAmount(cells[amountIdx] ?? "0");
+    } else if (creditIdx >= 0 && debitIdx >= 0) {
+      const credit = parseAmount(cells[creditIdx] ?? "0");
+      const debit = parseAmount(cells[debitIdx] ?? "0");
+      amount = credit > 0 ? credit : -debit;
+    }
+    const rawText = descIdx >= 0 ? (cells[descIdx] ?? "") : cells.slice(1).join(" ");
+    const aiVendor = rawText.slice(0, 32).trim() || "—";
+    rows.push({
+      id: `row-${i}`,
+      date: date || "—",
+      rawText: rawText.slice(0, 120) || "—",
+      amount,
+      currency: defaultCurrency,
+      aiCategory: "Other",
+      aiVendor,
+      aiConfidence: 85,
+    });
+  }
+  return rows;
+}
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
@@ -114,7 +188,52 @@ export function useCSVImport() {
     if (analyzeTimer.current) clearInterval(analyzeTimer.current);
   };
 
-  // ── Phase 2: Uploading (0→100% in ~1.5s) ──────────────────────────────────
+  // ── Phase 3: Read file and parse → review ───────────────────────────────────
+  const startAnalyzing = useCallback((file: File) => {
+    setStage("analyzing");
+    setProgress(0);
+    terminalIdx.current = 0;
+    setTerminal(TERMINAL_LINES[0]);
+
+    analyzeTimer.current = setInterval(() => {
+      terminalIdx.current += 1;
+      if (terminalIdx.current < TERMINAL_LINES.length) {
+        setTerminal(TERMINAL_LINES[terminalIdx.current]);
+      }
+    }, 500);
+
+    const analysisProgress = setInterval(() => {
+      setProgress((p) => Math.min(p + 4, 95));
+    }, 80);
+
+    const finishWithRows = (parsedRows: ImportRow[]) => {
+      clearInterval(analyzeTimer.current!);
+      clearInterval(analysisProgress);
+      setProgress(100);
+      setRows(parsedRows);
+      setStage("review");
+    };
+
+    const isCSV = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv";
+    if (!isCSV) {
+      setTimeout(() => finishWithRows(GCC_MOCK_ROWS), 1_800);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = (reader.result as string) ?? "";
+      const parsed = parseCSVToImportRows(text);
+      setTimeout(
+        () => finishWithRows(parsed.length > 0 ? parsed : GCC_MOCK_ROWS),
+        800
+      );
+    };
+    reader.onerror = () => setTimeout(() => finishWithRows(GCC_MOCK_ROWS), 800);
+    reader.readAsText(file, "UTF-8");
+  }, []);
+
+  // ── Phase 2: Uploading (0→100% in ~1.2s) ────────────────────────────────────
   const startUpload = useCallback((file: File) => {
     setFileName(file.name);
     setStage("uploading");
@@ -122,46 +241,16 @@ export function useCSVImport() {
 
     uploadTimer.current = setInterval(() => {
       setProgress((p) => {
-        const next = p + Math.random() * 14 + 8;
+        const next = p + Math.random() * 12 + 10;
         if (next >= 100) {
           clearInterval(uploadTimer.current!);
-          startAnalyzing();
+          startAnalyzing(file);
           return 100;
         }
         return next;
       });
     }, 100);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Phase 3: Analyzing (terminal feed for ~3s) ────────────────────────────
-  const startAnalyzing = useCallback(() => {
-    setStage("analyzing");
-    setProgress(0);
-    terminalIdx.current = 0;
-    setTerminal(TERMINAL_LINES[0]);
-
-    // Cycle terminal strings every 600ms
-    analyzeTimer.current = setInterval(() => {
-      terminalIdx.current += 1;
-      if (terminalIdx.current < TERMINAL_LINES.length) {
-        setTerminal(TERMINAL_LINES[terminalIdx.current]);
-      }
-    }, 600);
-
-    // Fake progress during analysis
-    const analysisProgress = setInterval(() => {
-      setProgress((p) => Math.min(p + 3, 95));
-    }, 90);
-
-    // After 3s → review
-    setTimeout(() => {
-      clearInterval(analyzeTimer.current!);
-      clearInterval(analysisProgress);
-      setProgress(100);
-      setRows(GCC_MOCK_ROWS);
-      setStage("review");
-    }, 3_000);
-  }, []);
+  }, [startAnalyzing]);
 
   // ── onDrop handler ────────────────────────────────────────────────────────
   const onDrop = useCallback((accepted: File[]) => {

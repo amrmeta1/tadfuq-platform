@@ -41,6 +41,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
 import { useEntity } from "@/contexts/EntityContext";
+import { useDemo } from "@/contexts/DemoContext";
 import type { LucideIcon } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 
@@ -118,6 +119,7 @@ function NavSection({
   nav,
   open,
   onToggle,
+  demoBasePath,
 }: {
   title: string;
   items: NavItem[];
@@ -125,8 +127,11 @@ function NavSection({
   nav: Dictionary["nav"];
   open: boolean;
   onToggle: () => void;
+  demoBasePath: string | null;
 }) {
-  const hasActive = items.some((item) => pathname === item.href);
+  const resolveHref = (href: string) =>
+    demoBasePath && href.startsWith("/app/") ? `${demoBasePath}${href.slice(4)}` : href;
+  const hasActive = items.some((item) => pathname === item.href || pathname === resolveHref(item.href));
 
   return (
     <div className="space-y-0.5">
@@ -150,12 +155,13 @@ function NavSection({
       </button>
       {open &&
         items.map((item) => {
-          const active = pathname === item.href;
+          const href = resolveHref(item.href);
+          const active = pathname === href || pathname === item.href;
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
-              href={item.href}
+              href={href}
               className={cn(
                 "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors min-w-0",
                 active
@@ -178,6 +184,8 @@ type SectionKey = "liquidity" | "operations" | "compliance" | "enterprise";
 export function Sidebar() {
   const pathname = usePathname();
   const { t, dir } = useI18n();
+  const demo = useDemo();
+  const demoBasePath = demo.isDemoMode ? `/demo/${demo.slug}` : null;
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     liquidity: true,
     operations: true,
@@ -251,10 +259,10 @@ export function Sidebar() {
 
       {/* ── Navigation ── */}
       <nav className="flex-1 overflow-y-auto px-2 pb-4 space-y-1">
-        <NavSection title={t.nav.sectionLiquidity} items={LIQUIDITY_CORE} pathname={pathname} nav={t.nav} open={openSections.liquidity} onToggle={() => toggle("liquidity")} />
-        <NavSection title={t.nav.sectionOperations} items={OPERATIONS} pathname={pathname} nav={t.nav} open={openSections.operations} onToggle={() => toggle("operations")} />
-        <NavSection title={t.nav.sectionCompliance} items={COMPLIANCE} pathname={pathname} nav={t.nav} open={openSections.compliance} onToggle={() => toggle("compliance")} />
-        <NavSection title={t.nav.sectionEnterprise} items={ENTERPRISE} pathname={pathname} nav={t.nav} open={openSections.enterprise} onToggle={() => toggle("enterprise")} />
+        <NavSection title={t.nav.sectionLiquidity} items={LIQUIDITY_CORE} pathname={pathname} nav={t.nav} open={openSections.liquidity} onToggle={() => toggle("liquidity")} demoBasePath={demoBasePath} />
+        <NavSection title={t.nav.sectionOperations} items={OPERATIONS} pathname={pathname} nav={t.nav} open={openSections.operations} onToggle={() => toggle("operations")} demoBasePath={demoBasePath} />
+        <NavSection title={t.nav.sectionCompliance} items={COMPLIANCE} pathname={pathname} nav={t.nav} open={openSections.compliance} onToggle={() => toggle("compliance")} demoBasePath={demoBasePath} />
+        <NavSection title={t.nav.sectionEnterprise} items={ENTERPRISE} pathname={pathname} nav={t.nav} open={openSections.enterprise} onToggle={() => toggle("enterprise")} demoBasePath={demoBasePath} />
       </nav>
     </aside>
   );

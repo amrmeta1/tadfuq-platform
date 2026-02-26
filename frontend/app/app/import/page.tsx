@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useCSVImport } from "@/features/import/use-csv-import";
 import type { ImportRow } from "@/features/import/use-csv-import";
+import { useTenant } from "@/lib/hooks/use-tenant";
+import { useQueryClient } from "@tanstack/react-query";
+import { addImportedTransactions } from "@/features/transactions/mock-api";
 
 // ── Review Table (State 4) ────────────────────────────────────────────────────
 
@@ -88,6 +91,8 @@ export default function ImportPage() {
   const { toast } = useToast();
   const { fmt } = useCurrency();
   const router = useRouter();
+  const { currentTenant } = useTenant();
+  const queryClient = useQueryClient();
   const isAr = locale === "ar";
 
   const { stage, progress, terminalLine, fileName, rows, onDrop, handleReset } = useCSVImport();
@@ -104,9 +109,21 @@ export default function ImportPage() {
   });
 
   const handleConfirm = () => {
+    const tenantId = currentTenant?.id ?? "demo";
+    addImportedTransactions(
+      tenantId,
+      rows.map((r) => ({
+        date: r.date,
+        rawText: r.rawText,
+        amount: r.amount,
+        currency: r.currency,
+        aiVendor: r.aiVendor,
+      }))
+    );
+    queryClient.invalidateQueries({ queryKey: ["transactions"] });
     toast({
       title: isAr ? "تم الاستيراد بنجاح" : "Import successful",
-      description: isAr ? "تم حفظ ١٤٢ معاملة في دفتر الأستاذ" : "142 transactions saved to your ledger",
+      description: isAr ? `تم حفظ ${rows.length} معاملة — تظهر في صفحة المعاملات` : `${rows.length} transactions saved — they appear on the Transactions page`,
       variant: "success",
     });
     router.push("/app/dashboard");
@@ -207,8 +224,8 @@ export default function ImportPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 ms-6">
                     {isAr
-                      ? `تم تصنيف ${rows.length} معاملات تلقائيًا بدقة ٩٨٫٦٪`
-                      : `${rows.length} transactions auto-categorized with 98.6% accuracy`}
+                      ? `تم تحميل ${rows.length} معاملة من الملف`
+                      : `${rows.length} transactions loaded from file`}
                   </p>
                 </div>
                 <button
@@ -224,7 +241,7 @@ export default function ImportPage() {
                 <FileText className="h-3.5 w-3.5 shrink-0" />
                 <span className="font-mono">{fileName || "bank_statement.csv"}</span>
                 <Badge variant="secondary" className="text-[10px]">
-                  {isAr ? "١٤٢ صفًا" : "142 rows"}
+                  {isAr ? `${rows.length} صفًا` : `${rows.length} rows`}
                 </Badge>
               </div>
 
@@ -234,8 +251,8 @@ export default function ImportPage() {
                 <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                 <span>
                   {isAr
-                    ? "مستشار AI: تم رسم خريطة ١٤٢ معاملة تلقائيًا. تم اكتشاف نمط دفع ضريبة القيمة المضافة وتصنيفه تحت 'الضرائب'."
-                    : "Mustashar AI: 142 transactions mapped automatically. ZATCA VAT payment pattern detected and classified under 'Tax'."}
+                    ? `البيانات المعروضة من ملفك (${rows.length} صف). التصنيف التلقائي والربط بالخادم متاحان عند تفعيل الخدمة.`
+                    : `Data shown from your file (${rows.length} rows). Auto-categorization and server sync available when the service is enabled.`}
                 </span>
               </div>
             </div>
@@ -256,7 +273,7 @@ export default function ImportPage() {
             </Button>
             <Button size="sm" className="gap-1.5" onClick={handleConfirm}>
               <CheckCircle2 className="h-3.5 w-3.5" />
-              {isAr ? "تأكيد واستيراد ١٤٢ معاملة" : "Confirm & Import 142 Transactions"}
+              {isAr ? `تأكيد واستيراد ${rows.length} معاملة` : `Confirm & Import ${rows.length} Transactions`}
             </Button>
           </div>
         </div>

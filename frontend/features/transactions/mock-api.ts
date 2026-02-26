@@ -10,6 +10,73 @@ import type {
 } from "./types";
 import { CATEGORIES } from "./types";
 
+// ── Imported transactions (from CSV import) ───────────────────────────────────
+
+const IMPORTED_STORAGE_KEY = "cashflow_imported_transactions";
+
+export interface ImportedRowPayload {
+  date: string;
+  rawText: string;
+  amount: number;
+  currency: string;
+  aiVendor: string;
+}
+
+function loadImportedFromStorage(): Transaction[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(IMPORTED_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+function saveImportedToStorage(txns: Transaction[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(IMPORTED_STORAGE_KEY, JSON.stringify(txns));
+  } catch {
+    // ignore quota
+  }
+}
+
+/** Convert imported row payloads to Transaction and append to stored imports. Call after user confirms CSV import. */
+export function addImportedTransactions(
+  tenantId: string,
+  rows: ImportedRowPayload[]
+): void {
+  const existing = loadImportedFromStorage();
+  const accountId = "imported-1";
+  const accountName = "Imported";
+  const now = new Date().toISOString();
+  const newTxns: Transaction[] = rows.map((r, i) => ({
+    id: `imported-${Date.now()}-${i}`,
+    tenant_id: tenantId,
+    txn_date: (r.date || now.slice(0, 10)).slice(0, 10),
+    amount: r.amount,
+    currency: r.currency || "SAR",
+    type: (r.amount >= 0 ? "inflow" : "outflow") as TransactionType,
+    status: "cleared" as TransactionStatus,
+    description: r.rawText?.slice(0, 200) || "—",
+    counterparty: { name: r.aiVendor?.slice(0, 64) || "—", type: "vendor" as const },
+    category: "Other" as Category,
+    account_id: accountId,
+    account_name: accountName,
+    reference: undefined,
+    notes: undefined,
+    created_at: now,
+    updated_at: now,
+  }));
+  const merged = [...newTxns, ...existing];
+  saveImportedToStorage(merged);
+}
+
+function getImportedTransactions(): Transaction[] {
+  return loadImportedFromStorage();
+}
+
 const COUNTERPARTIES: Counterparty[] = [
   // ── Scored clients (AI profiled) ──────────────────────────────────────────
   {
@@ -118,11 +185,15 @@ function delay(ms = 350) {
 }
 
 export async function fetchTransactions(
-  _tenantId: string | undefined,
+  tenantId: string | undefined,
   filters: TransactionFilters = {}
 ): Promise<Transaction[]> {
   await delay();
-  let rows = [..._store];
+  const imported = getImportedTransactions();
+  const tenantImported = tenantId
+    ? imported.filter((t) => t.tenant_id === tenantId)
+    : imported;
+  let rows = [...tenantImported, ..._store];
 
   if (filters.search) {
     const q = filters.search.toLowerCase();

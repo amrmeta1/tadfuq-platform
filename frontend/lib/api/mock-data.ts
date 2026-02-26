@@ -3,6 +3,8 @@
  * Gated behind NEXT_PUBLIC_ENABLE_MOCKS=true
  */
 
+import { getDemoMockOptions } from "@/lib/demo-mock-store";
+
 export const MOCKS_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
 
@@ -25,9 +27,14 @@ export const DEMO_TENANT: Tenant = {
   updated_at: now,
 };
 
-export function getMockTenantList(): { data: Tenant[]; meta: { total: number; limit: number; offset: number } } {
+export function getMockTenantList(companyName?: string): { data: Tenant[]; meta: { total: number; limit: number; offset: number } } {
+  const name = companyName?.trim() || "Demo";
+  const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+  const tenant: Tenant = companyName
+    ? { ...DEMO_TENANT, id: `demo-${slug}`, name, slug: slug || "demo" }
+    : DEMO_TENANT;
   return {
-    data: [DEMO_TENANT],
+    data: [tenant],
     meta: { total: 1, limit: 20, offset: 0 },
   };
 }
@@ -115,12 +122,24 @@ const MOCK_ALERTS = [
   },
 ];
 
+function applyCompanyToAlerts(companyName: string) {
+  return MOCK_ALERTS.map((a) => ({
+    ...a,
+    description: a.description.replace("Based on current burn rate", `Based on ${companyName}'s current burn rate`),
+    explanation: a.explanation.replace("Your average", `${companyName}'s average`),
+  }));
+}
+
 export function getMockAlerts() {
-  return { data: MOCK_ALERTS, meta: { total: MOCK_ALERTS.length, limit: 20, offset: 0 } };
+  const opts = getDemoMockOptions();
+  const data = opts ? applyCompanyToAlerts(opts.companyName) : MOCK_ALERTS;
+  return { data, meta: { total: data.length, limit: 20, offset: 0 } };
 }
 
 export function getMockAlert(id: string) {
-  const alert = MOCK_ALERTS.find((a) => a.id === id);
+  const opts = getDemoMockOptions();
+  const list = opts ? applyCompanyToAlerts(opts.companyName) : MOCK_ALERTS;
+  const alert = list.find((a) => a.id === id);
   if (!alert) return null;
   return { data: alert };
 }
@@ -182,11 +201,13 @@ export function getMockAgentsStatus() {
 }
 
 export function getMockDailyBrief() {
+  const opts = getDemoMockOptions();
+  const name = opts?.companyName || "Your company";
   return {
     data: {
       date: new Date().toISOString().slice(0, 10),
-      greeting_en: "Good morning! Here's your daily cash brief.",
-      greeting_ar: "صباح الخير! إليك ملخصك النقدي اليومي.",
+      greeting_en: `Good morning! Here's ${name}'s daily cash brief.`,
+      greeting_ar: `صباح الخير! إليك الملخص النقدي اليومي لـ ${name}.`,
       items: [
         { icon: "💰", text_en: "Current balance: SAR 287,450", text_ar: "الرصيد الحالي: ٢٨٧,٤٥٠ ر.س" },
         { icon: "📈", text_en: "Expected inflows today: SAR 15,000 from 2 invoices", text_ar: "التدفقات المتوقعة اليوم: ١٥,٠٠٠ ر.س من فاتورتين" },
@@ -201,21 +222,25 @@ export function getMockDailyBrief() {
 // ── Reports ───────────────────────────────────────────────────
 
 export function getMockReports() {
+  const opts = getDemoMockOptions();
+  const prefix = opts?.companyName ? `${opts.companyName} — ` : "";
   return {
     data: [
-      { id: "rep-2024-01", title: "January 2024 Cash Report", period: "2024-01", status: "ready" as const, created_at: "2024-02-01T08:00:00Z" },
-      { id: "rep-2024-02", title: "February 2024 Cash Report", period: "2024-02", status: "ready" as const, created_at: "2024-03-01T08:00:00Z" },
-      { id: "rep-2024-03", title: "March 2024 Cash Report", period: "2024-03", status: "generating" as const, created_at: "2024-04-01T08:00:00Z" },
+      { id: "rep-2024-01", title: `${prefix}January 2024 Cash Report`, period: "2024-01", status: "ready" as const, created_at: "2024-02-01T08:00:00Z" },
+      { id: "rep-2024-02", title: `${prefix}February 2024 Cash Report`, period: "2024-02", status: "ready" as const, created_at: "2024-03-01T08:00:00Z" },
+      { id: "rep-2024-03", title: `${prefix}March 2024 Cash Report`, period: "2024-03", status: "generating" as const, created_at: "2024-04-01T08:00:00Z" },
     ],
     meta: { total: 3, limit: 20, offset: 0 },
   };
 }
 
 export function getMockReport(id: string) {
+  const opts = getDemoMockOptions();
+  const titlePrefix = opts?.companyName ? `${opts.companyName} — ` : "";
   return {
     data: {
       id,
-      title: "Monthly Cash Flow Report",
+      title: `${titlePrefix}Monthly Cash Flow Report`,
       period: "2024-02",
       status: "ready" as const,
       created_at: "2024-03-01T08:00:00Z",

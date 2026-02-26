@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
   CheckCircle2,
@@ -21,6 +21,7 @@ import {
   Home,
   Store,
 } from "lucide-react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,9 @@ import {
   type CountryCode,
   type CompanySize,
 } from "@/contexts/CompanyContext";
+import { useSession } from "next-auth/react";
+import { createTenant } from "@/lib/api/tenant-api";
+import { useTenant } from "@/lib/hooks/use-tenant";
 
 // ── Static data ───────────────────────────────────────────────────────────────
 
@@ -118,6 +122,19 @@ const DEFAULT_PHRASES = [
 
 const TOTAL_STEPS = 4;
 
+/** Map demo URL industry to onboarding industry value */
+function demoIndustryToOnboarding(demoIndustry: string | null): string {
+  const map: Record<string, string> = {
+    contracting: "construction",
+    trading: "trading",
+    clinic: "other",
+    retail: "other",
+    general: "tech",
+  };
+  if (!demoIndustry) return "tech";
+  return map[demoIndustry] ?? "tech";
+}
+
 // ── Slide variants ────────────────────────────────────────────────────────────
 
 function slideVariants(direction: number) {
@@ -151,13 +168,35 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+function slugify(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "company";
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
   const { locale, dir } = useI18n();
   const { updateCompanyProfile, setCountry } = useCompany();
+  const { setCurrentTenant, setMemberships } = useTenant();
   const isAr = locale === "ar";
 
-  // Form state
+  const fromDemo = useMemo(() => {
+    const company = searchParams.get("company");
+    const industryParam = searchParams.get("industry");
+    return {
+      companyName: company?.trim() || "",
+      industry: demoIndustryToOnboarding(industryParam),
+    };
+  }, [searchParams]);
+
+  // Form state (pre-filled when coming from demo)
   const [companyName, setCompanyName] = useState("");
   const [companySize, setCompanySize] = useState<CompanySize>("sme");
   const [industry,    setIndustry]    = useState("tech");
@@ -166,6 +205,11 @@ export default function OnboardingPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [useCases,    setUseCases]    = useState<string[]>([]);
 
+  useEffect(() => {
+    if (fromDemo.companyName) setCompanyName((c) => c || fromDemo.companyName);
+    if (fromDemo.industry) setIndustry(fromDemo.industry);
+  }, [fromDemo.companyName, fromDemo.industry]);
+
   // Wizard state
   const [step,      setStep]      = useState<Step>(1);
   const [direction, setDirection] = useState(1);
@@ -173,6 +217,8 @@ export default function OnboardingPage() {
   // Step 5 state
   const [loadingDone, setLoadingDone] = useState(false);
   const [phraseIdx,   setPhraseIdx]   = useState(0);
+  const [tenantCreatedOnServer, setTenantCreatedOnServer] = useState(false);
+  const [backendUnavailable, setBackendUnavailable] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -201,11 +247,41 @@ export default function OnboardingPage() {
       setPhraseIdx((i) => (i + 1) % loadingPhrases.length);
     }, 700);
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       clearInterval(intervalRef.current!);
+      const name = companyName.trim();
+      const slug = slugify(name);
+
+      if (status === "authenticated" && session?.user) {
+        try {
+          const { data: tenant } = await createTenant({
+            name,
+            slug,
+            plan: "starter",
+            metadata: { industry, companySize, countryCode, userRole, useCases },
+          });
+          const newMembership = {
+            id: `m-${tenant.id}`,
+            tenant_id: tenant.id,
+            user_id: "",
+            role: "accountant_readonly" as const,
+            status: "active" as const,
+            created_at: tenant.created_at,
+            updated_at: tenant.updated_at,
+            tenant,
+          };
+          setMemberships([newMembership]);
+          setCurrentTenant(tenant);
+          setTenantCreatedOnServer(true);
+        } catch {
+          setBackendUnavailable(true);
+          // Backend not available or error: continue with localStorage only
+        }
+      }
+
       setCountry(countryCode);
       updateCompanyProfile({
-        companyName: companyName.trim(),
+        companyName: name,
         companySize,
         industry,
         userRole,
@@ -669,9 +745,13 @@ export default function OnboardingPage() {
 
                 <div className="space-y-2">
                   <h2 className="text-lg font-bold leading-snug">
-                    {isAr
-                      ? `جاري بناء العقل المالي لـ${companyName || "شركتك"}...`
-                      : `Building the financial brain for ${companyName || "your company"}...`}
+                    {status === "authenticated"
+                      ? (isAr
+                          ? `جاري ربط مساحة العمل بحسابك — ${companyName || "شركتك"}...`
+                          : `Linking your workspace — ${companyName || "your company"}...`)
+                      : (isAr
+                          ? `جاري بناء العقل المالي لـ${companyName || "شركتك"}...`
+                          : `Building the financial brain for ${companyName || "your company"}...`)}
                   </h2>
                   <AnimatePresence mode="wait">
                     <motion.p
@@ -726,7 +806,29 @@ export default function OnboardingPage() {
                   <p className="text-sm text-muted-foreground">
                     {isAr ? "مساحة عملك جاهزة تماماً" : "Your workspace is all set up"}
                   </p>
+                  {tenantCreatedOnServer && (
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                      {isAr ? "تم ربط مساحة العمل بحسابك" : "Workspace linked to your account"}
+                    </p>
+                  )}
+                  {backendUnavailable && status === "authenticated" && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      {isAr ? "تم حفظ الإعدادات محلياً — يمكنك المزامنة لاحقاً" : "Saved locally — you can sync later when the server is available"}
+                    </p>
+                  )}
                 </div>
+
+                {/* Next: connect bank / data — optional hint */}
+                <p className="text-xs text-muted-foreground">
+                  {isAr ? "لاحقاً: " : "Next: "}
+                  <Link
+                    href="/app/integrations-hub"
+                    className="underline hover:text-primary font-medium"
+                  >
+                    {isAr ? "اربط حسابك البنكي أو استورد البيانات" : "Connect your bank or import data"}
+                  </Link>
+                  {isAr ? " من لوحة الربط." : " in Integrations."}
+                </p>
 
                 {/* Summary card */}
                 <div className="w-full rounded-xl border bg-muted/30 p-4 text-start space-y-2.5">
@@ -758,7 +860,7 @@ export default function OnboardingPage() {
 
                 <Button
                   className="w-full h-10 gap-2 font-semibold"
-                  onClick={() => router.push("/app/dashboard")}
+                  onClick={() => router.replace("/app/dashboard")}
                 >
                   {isAr ? "الذهاب إلى لوحة التحكم" : "Go to Dashboard"}
                   {isAr ? <ArrowLeft className="h-4 w-4" /> : <ArrowRight className="h-4 w-4" />}

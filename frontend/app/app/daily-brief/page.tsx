@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/context";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { getMockDailyBrief } from "@/lib/api/mock-data";
 import { cn } from "@/lib/utils";
 
 const HEALTH_SCORE = 82;
@@ -81,6 +82,8 @@ export default function DailyBriefPage() {
   const { fmt } = useCurrency();
   const isAr = locale === "ar";
   const hc = healthColor(HEALTH_SCORE);
+  const brief = getMockDailyBrief().data;
+  const greeting = isAr ? brief.greeting_ar : brief.greeting_en;
 
   const expectedInflow = 23_000;
   const expectedOutflow = 0;
@@ -101,7 +104,7 @@ export default function DailyBriefPage() {
               : "Tuesday, February 24, 2026"}
           </p>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-1">
-            {isAr ? "صباح الخير، آدم" : "Good morning, Adam"}
+            {greeting}
           </h1>
           <p className="text-sm text-muted-foreground mb-5">
             {isAr
@@ -117,6 +120,16 @@ export default function DailyBriefPage() {
               ? `مؤشر الصحة: ${HEALTH_SCORE}/100 — ${healthLabel(HEALTH_SCORE, true)}`
               : `Health Score: ${HEALTH_SCORE}/100 — ${healthLabel(HEALTH_SCORE, false)}`}
           </div>
+          {brief.items?.length > 0 && (
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+              {brief.items.map((item, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <span aria-hidden>{item.icon}</span>
+                  <span>{isAr ? item.text_ar : item.text_en}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         {/* ═══ 2. AGENT SECTIONS ═══ */}

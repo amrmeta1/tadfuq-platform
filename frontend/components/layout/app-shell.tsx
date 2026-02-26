@@ -10,6 +10,7 @@ import { Sidebar } from "./sidebar";
 import { Navbar } from "./navbar";
 import { DemoModeBanner } from "./demo-mode-banner";
 import { useTenant } from "@/lib/hooks/use-tenant";
+import { useDemo } from "@/contexts/DemoContext";
 import { useI18n } from "@/lib/i18n/context";
 import { useCommandMenu } from "@/lib/command-store";
 import { listTenants } from "@/lib/api/tenant-api";
@@ -57,6 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { dir, locale } = useI18n();
   const { open: openCommandPalette } = useCommandMenu();
+  const demo = useDemo();
   const isAr = locale === "ar";
   const {
     currentTenant,
@@ -69,6 +71,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const tenantInitDone = useRef(false);
 
   useEffect(() => {
+    if (demo.isDemoMode) {
+      if (tenantInitDone.current) return;
+      tenantInitDone.current = true;
+      const mock = getMockTenantList(demo.companyName);
+      const membershipsWithTenant = mock.data.map((t) => ({
+        id: t.id,
+        tenant_id: t.id,
+        user_id: "",
+        role: "accountant_readonly" as const,
+        status: "active" as const,
+        created_at: t.created_at,
+        updated_at: t.updated_at,
+        tenant: t,
+      }));
+      setMemberships(membershipsWithTenant);
+      if (mock.data.length > 0) setCurrentTenant(mock.data[0]);
+      setIsLoading(false);
+      return;
+    }
     if (DEV_SKIP_AUTH && status === "unauthenticated") {
       if (tenantInitDone.current) return;
       tenantInitDone.current = true;
@@ -93,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (status === "unauthenticated" && !DEV_SKIP_AUTH) {
       router.push("/login");
     }
-  }, [status, router, setCurrentTenant, setMemberships, setIsLoading]);
+  }, [demo.isDemoMode, demo.companyName, status, router, setCurrentTenant, setMemberships, setIsLoading]);
 
   const { data: tenantList } = useQuery({
     queryKey: ["tenants"],
@@ -150,9 +171,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, [tenantList, setCurrentTenant, setMemberships, setIsLoading]);
 
-  if (status === "loading" && !DEV_SKIP_AUTH) return <AppShellSkeleton />;
-  if (status === "unauthenticated" && !DEV_SKIP_AUTH) return null;
-  if (DEV_SKIP_AUTH && status === "unauthenticated" && isLoading) return <AppShellSkeleton />;
+  if (status === "loading" && !DEV_SKIP_AUTH && !demo.isDemoMode) return <AppShellSkeleton />;
+  if (status === "unauthenticated" && !DEV_SKIP_AUTH && !demo.isDemoMode) return null;
+  if ((DEV_SKIP_AUTH || demo.isDemoMode) && status === "unauthenticated" && isLoading) return <AppShellSkeleton />;
 
   return (
     <div className="flex h-screen overflow-hidden" dir={dir}>

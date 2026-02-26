@@ -16,6 +16,12 @@ const config: Config = {
     },
     extend: {
       colors: {
+        neon: "#00FFAA",
+        gold: "#FFD700",
+        "landing-dark": "#0A2540",
+        "landing-darker": "#111111",
+        "landing-cream": "#F8F7F4",
+        "landing-gray": "#1F2937",
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

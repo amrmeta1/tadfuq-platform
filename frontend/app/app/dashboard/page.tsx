@@ -55,6 +55,10 @@ import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useEntity, entityBalanceInSAR, ENTITIES } from "@/contexts/EntityContext";
+import { useTenant } from "@/lib/hooks/use-tenant";
+import { useDemo } from "@/contexts/DemoContext";
+import { useTransactions } from "@/features/transactions/hooks";
+import type { Transaction } from "@/features/transactions/types";
 import { Amt } from "@/components/ui/amt";
 import { exportToCSV, formatForExport } from "@/lib/export";
 import { DashboardRightSidebar } from "@/components/dashboard/DashboardRightSidebar";
@@ -110,13 +114,38 @@ interface RecentTx {
   timeAr: string;
 }
 
-const RECENT_TX: RecentTx[] = [
+const RECENT_TX_FALLBACK: RecentTx[] = [
   { id: "1", descEn: "Client B payment received", descAr: "دفعة العميل ب", amount: 67000, type: "inflow", time: "2h ago", timeAr: "منذ ٢ س" },
   { id: "2", descEn: "Ooredoo auto-debit", descAr: "خصم أوريدو التلقائي", amount: 3200, type: "outflow", time: "5h ago", timeAr: "منذ ٥ س" },
   { id: "3", descEn: "Service revenue - Project Alpha", descAr: "إيراد خدمات - مشروع ألفا", amount: 23000, type: "inflow", time: "1d ago", timeAr: "منذ يوم" },
   { id: "4", descEn: "Office rent payment", descAr: "دفع إيجار المكتب", amount: 15000, type: "outflow", time: "2d ago", timeAr: "منذ ٢ أيام" },
   { id: "5", descEn: "Client A invoice payment", descAr: "دفعة فاتورة العميل أ", amount: 45000, type: "inflow", time: "3d ago", timeAr: "منذ ٣ أيام" },
 ];
+
+function relativeTime(dateStr: string, isAr: boolean): string {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  if (diffDays === 0) return isAr ? "اليوم" : "Today";
+  if (diffDays === 1) return isAr ? "أمس" : "Yesterday";
+  if (diffDays < 7) return isAr ? `منذ ${diffDays} أيام` : `${diffDays}d ago`;
+  if (diffDays < 30) return isAr ? `منذ ${Math.floor(diffDays / 7)} أسبوع` : `${Math.floor(diffDays / 7)}w ago`;
+  return isAr ? `منذ ${Math.floor(diffDays / 30)} شهر` : `${Math.floor(diffDays / 30)}mo ago`;
+}
+
+function transactionToRecentTx(t: Transaction, isAr: boolean): RecentTx {
+  const desc = t.description || t.counterparty?.name || "—";
+  return {
+    id: t.id,
+    descEn: desc,
+    descAr: desc,
+    amount: Math.abs(t.amount),
+    type: t.amount >= 0 ? "inflow" : "outflow",
+    time: relativeTime(t.txn_date || t.created_at, false),
+    timeAr: relativeTime(t.txn_date || t.created_at, true),
+  };
+}
 
 interface UpcomingPmt {
   id: string;
@@ -216,15 +245,26 @@ function getMockKpisForRange(
   };
 }
 
+const RECENT_TX_LIMIT = 7;
+
 export default function DashboardPage() {
   const { locale, dir, t } = useI18n();
   const d = t.dashboard;
   const { profile } = useCompany();
   const { fmt, fmtDual, fmtAxis, selected: currCode } = useCurrency();
   const { selectedId } = useEntity();
+  const { currentTenant } = useTenant();
+  const demo = useDemo();
+  const { data: transactions = [], isLoading: transactionsLoading } = useTransactions(currentTenant?.id, {});
   const curr = currCode;
   const companyName = profile.companyName || (locale === "ar" ? "شركتك" : "your company");
   const isAr = locale === "ar";
+  const transactionsHref = demo.isDemoMode ? `/demo/${demo.slug}/transactions` : "/app/transactions";
+
+  const recentTxList: RecentTx[] =
+    transactions.length > 0
+      ? transactions.slice(0, RECENT_TX_LIMIT).map((tx) => transactionToRecentTx(tx, isAr))
+      : RECENT_TX_FALLBACK;
 
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>(() => defaultDateRange());
   const [dateFromInput, setDateFromInput] = useState(() => toDateOnly(defaultDateRange().from));
@@ -707,14 +747,28 @@ export default function DashboardPage() {
                 <Zap className="h-4 w-4 text-muted-foreground" />
                 <CardTitle className="text-sm font-semibold">{d.recentActivity}</CardTitle>
               </div>
-              <Link href="/app/transactions" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+              <Link href={transactionsHref} className="text-xs text-muted-foreground hover:text-foreground hover:underline">
                 {t.nav.transactions} →
               </Link>
             </div>
           </CardHeader>
           <CardContent className="px-5 pb-5">
+            {transactionsLoading ? (
+              <div className="space-y-1">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center gap-3 py-2.5 border-b border-border/30 last:border-b-0">
+                    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-16" />
+                    </div>
+                    <Skeleton className="h-4 w-20 shrink-0" />
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="space-y-1">
-              {RECENT_TX.map((tx) => (
+              {recentTxList.map((tx) => (
                 <div key={tx.id} className="flex items-center gap-3 py-2.5 border-b border-border/30 last:border-b-0">
                   <div className={cn(
                     "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
@@ -737,6 +791,7 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+            )}
           </CardContent>
         </Card>
       )}
