@@ -20,17 +20,12 @@ interface ExposureChartProps {
   data: CurrencySlice[];
   config: ChartConfig;
   isAr?: boolean;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmtSAR(n: number): string {
-  return `SAR ${n.toLocaleString("en-US")}`;
+  fmt: (amountInSAR: number) => string;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ExposureChart({ data, config, isAr = false }: ExposureChartProps) {
+export function ExposureChart({ data, config, isAr = false, fmt }: ExposureChartProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* Donut chart */}
@@ -78,7 +73,7 @@ export function ExposureChart({ data, config, isAr = false }: ExposureChartProps
               </span>
               {/* Amount — pushed to end */}
               <span className="ms-auto tabular-nums font-mono text-xs text-muted-foreground">
-                {fmtSAR(slice.amount)}
+                {fmt(slice.amount)}
               </span>
             </li>
           );

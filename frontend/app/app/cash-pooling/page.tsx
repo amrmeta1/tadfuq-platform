@@ -33,24 +33,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtSAR(n: number, short = false): string {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}SAR ${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}SAR ${(abs / 1_000).toFixed(0)}K`;
-  return `${sign}SAR ${abs.toLocaleString("en-US")}`;
-}
-
-function fmtAxis(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-}
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
@@ -128,24 +112,23 @@ interface OptRow {
   standaloneRate: string;
   poolRate: string;
   balance: number;
-  savingsEn: string;
-  savingsAr: string;
+  savingsAmount: number;
   highlight?: boolean;
 }
 
 const OPT_TABLE: OptRow[] = [
-  { entityEn: "HQ", entityAr: "المقر الرئيسي", standaloneRate: "1.5%", poolRate: "2.8%", balance: 2_100_000, savingsEn: "SAR 2,275", savingsAr: "٢٬٢٧٥ ر.س" },
-  { entityEn: "Construction", entityAr: "المقاولات", standaloneRate: "1.2%", poolRate: "2.8%", balance: 1_450_000, savingsEn: "SAR 1,933", savingsAr: "١٬٩٣٣ ر.س" },
-  { entityEn: "Trading", entityAr: "التجارية", standaloneRate: "1.0%", poolRate: "2.8%", balance: 680_000, savingsEn: "SAR 1,020", savingsAr: "١٬٠٢٠ ر.س" },
-  { entityEn: "Tech", entityAr: "التقنية", standaloneRate: "0.8%", poolRate: "2.8%", balance: 420_000, savingsEn: "SAR 700", savingsAr: "٧٠٠ ر.س" },
-  { entityEn: "Properties", entityAr: "العقارية", standaloneRate: "8.0% OD", poolRate: "2.8%", balance: 170_000, savingsEn: "SAR 737", savingsAr: "٧٣٧ ر.س", highlight: true },
+  { entityEn: "HQ", entityAr: "المقر الرئيسي", standaloneRate: "1.5%", poolRate: "2.8%", balance: 2_100_000, savingsAmount: 2_275 },
+  { entityEn: "Construction", entityAr: "المقاولات", standaloneRate: "1.2%", poolRate: "2.8%", balance: 1_450_000, savingsAmount: 1_933 },
+  { entityEn: "Trading", entityAr: "التجارية", standaloneRate: "1.0%", poolRate: "2.8%", balance: 680_000, savingsAmount: 1_020 },
+  { entityEn: "Tech", entityAr: "التقنية", standaloneRate: "0.8%", poolRate: "2.8%", balance: 420_000, savingsAmount: 700 },
+  { entityEn: "Properties", entityAr: "العقارية", standaloneRate: "8.0% OD", poolRate: "2.8%", balance: 170_000, savingsAmount: 737, highlight: true },
 ];
 
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function CashPoolingPage() {
   const { t, dir } = useI18n();
-  const { profile } = useCompany();
+  const { fmt, fmtAxis, selected: currCode } = useCurrency();
   const isAr = dir === "rtl";
 
   const [poolType, setPoolType] = useState<"physical" | "notional">("physical");
@@ -206,29 +189,25 @@ export default function CashPoolingPage() {
                 {
                   labelEn: "Total Pool Balance",
                   labelAr: "إجمالي رصيد التجميع",
-                  value: "SAR 4,820,000",
-                  valueAr: "٤٬٨٢٠٬٠٠٠ ر.س",
+                  value: fmt(4_820_000),
                   icon: Banknote,
                 },
                 {
                   labelEn: "Interest Savings (MTD)",
                   labelAr: "وفورات الفائدة (الشهر)",
-                  value: "SAR 12,400",
-                  valueAr: "١٢٬٤٠٠ ر.س",
+                  value: fmt(12_400),
                   icon: TrendingUp,
                 },
                 {
                   labelEn: "Borrowing Cost Avoided",
                   labelAr: "تكلفة اقتراض تم تجنبها",
-                  value: "SAR 8,200",
-                  valueAr: "٨٬٢٠٠ ر.س",
+                  value: fmt(8_200),
                   icon: ShieldCheck,
                 },
                 {
                   labelEn: "Net Pool Benefit",
                   labelAr: "صافي فائدة التجميع",
-                  value: "SAR 20,600",
-                  valueAr: "٢٠٬٦٠٠ ر.س",
+                  value: fmt(20_600),
                   icon: Zap,
                 },
                 {
@@ -245,7 +224,7 @@ export default function CashPoolingPage() {
                     {isAr ? m.labelAr : m.labelEn}
                   </div>
                   <p className="text-lg font-bold tracking-tight">
-                    {isAr ? m.valueAr : m.value}
+                    {"valueAr" in m ? (isAr ? m.valueAr : m.value) : m.value}
                   </p>
                 </div>
               ))}
@@ -279,7 +258,7 @@ export default function CashPoolingPage() {
                 </div>
                 <div className={cn("text-right", isAr && "text-left")}>
                   <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                    {isAr ? "٢٬١٠٠٬٠٠٠ ر.س" : "SAR 2,100,000"}
+                    {fmt(2_100_000)}
                   </p>
                 </div>
               </div>
@@ -314,7 +293,7 @@ export default function CashPoolingPage() {
                         {isAr ? ent.nameAr : ent.nameEn}
                       </p>
                       <p className="text-lg font-bold mt-0.5">
-                        {fmtSAR(ent.balance)}
+                        {fmt(ent.balance)}
                       </p>
                     </div>
                     <Badge
@@ -331,7 +310,7 @@ export default function CashPoolingPage() {
                     <span>
                       {isAr ? ent.benefitAr : ent.benefitEn}:{" "}
                       <span className="font-semibold text-foreground">
-                        SAR {ent.benefitAmount.toLocaleString("en-US")}/{isAr ? "شهر" : "mo"}
+                        {fmt(ent.benefitAmount)}/{isAr ? "شهر" : "mo"}
                       </span>
                     </span>
                   </div>
@@ -362,7 +341,7 @@ export default function CashPoolingPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} className="text-muted-foreground" />
                   <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 12 }} className="text-muted-foreground" />
                   <Tooltip
-                    formatter={(val: number) => [fmtSAR(val), isAr ? "الرصيد" : "Balance"]}
+                    formatter={(val: number) => [fmt(val), isAr ? "الرصيد" : "Balance"]}
                     contentStyle={{
                       borderRadius: 8,
                       fontSize: 12,
@@ -438,10 +417,10 @@ export default function CashPoolingPage() {
                         {row.poolRate}
                       </td>
                       <td className={cn("py-2.5 font-medium", isAr ? "text-left" : "text-right")}>
-                        {fmtSAR(row.balance)}
+                        {fmt(row.balance)}
                       </td>
                       <td className={cn("py-2.5 font-semibold text-emerald-600 dark:text-emerald-400", isAr ? "text-left" : "text-right")}>
-                        {isAr ? row.savingsAr : row.savingsEn}
+                        {fmt(row.savingsAmount)}
                       </td>
                     </tr>
                   ))}
@@ -453,10 +432,10 @@ export default function CashPoolingPage() {
                     <td />
                     <td />
                     <td className={cn("py-2.5", isAr ? "text-left" : "text-right")}>
-                      SAR 4.82M
+                      {currCode} {fmtAxis(4_820_000)}
                     </td>
                     <td className={cn("py-2.5 text-emerald-600 dark:text-emerald-400", isAr ? "text-left" : "text-right")}>
-                      {isAr ? "٦٬٦٦٥ ر.س/شهر" : "SAR 6,665/mo"}
+                      {fmt(6_665)}/{isAr ? "شهر" : "mo"}
                     </td>
                   </tr>
                 </tbody>
@@ -472,24 +451,24 @@ export default function CashPoolingPage() {
               icon: ShieldCheck,
               titleEn: "Minimum Balance",
               titleAr: "الحد الأدنى للرصيد",
-              valueEn: "SAR 50,000 per entity",
-              valueAr: "٥٠٬٠٠٠ ر.س لكل كيان",
+              value: fmt(50_000),
+              valueSuffix: isAr ? "لكل كيان" : "per entity",
               color: "text-blue-500",
             },
             {
               icon: Banknote,
               titleEn: "Max Borrowing Limit",
               titleAr: "حد الاقتراض الأقصى",
-              valueEn: "SAR 500,000",
-              valueAr: "٥٠٠٬٠٠٠ ر.س",
+              value: fmt(500_000),
+              valueSuffix: null,
               color: "text-amber-500",
             },
             {
               icon: Zap,
               titleEn: "Auto-Sweep Threshold",
               titleAr: "حد التحويل التلقائي",
-              valueEn: "SAR 200,000",
-              valueAr: "٢٠٠٬٠٠٠ ر.س",
+              value: fmt(200_000),
+              valueSuffix: null,
               color: "text-emerald-500",
             },
           ].map((rule) => (
@@ -501,7 +480,7 @@ export default function CashPoolingPage() {
                     {isAr ? rule.titleAr : rule.titleEn}
                   </p>
                   <p className="font-semibold text-sm mt-0.5">
-                    {isAr ? rule.valueAr : rule.valueEn}
+                    {rule.value}{rule.valueSuffix ? ` ${rule.valueSuffix}` : ""}
                   </p>
                 </div>
               </CardContent>
@@ -525,8 +504,8 @@ export default function CashPoolingPage() {
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed">
                   {isAr
-                    ? "نسبة استخدام التجميع عند ٧٨٪. كيان العقارية يقترض لمدة ٣ أشهر متتالية. يُنصح بضخ رأسمال بمبلغ ١٠٠٬٠٠٠ ر.س من فائض المقر الرئيسي لتقليل تكاليف الاقتراض بمقدار ٢٬٣٠٠ ر.س شهرياً."
-                    : "Pool utilization at 78%. Properties entity has been borrowing for 3 consecutive months. Consider a capital injection of SAR 100K from HQ surplus to reduce borrowing costs by SAR 2,300/month."}
+                    ? `نسبة استخدام التجميع عند ٧٨٪. كيان العقارية يقترض لمدة ٣ أشهر متتالية. يُنصح بضخ رأسمال بمبلغ ${fmt(100_000)} من فائض المقر الرئيسي لتقليل تكاليف الاقتراض بمقدار ${fmt(2_300)} شهرياً.`
+                    : `Pool utilization at 78%. Properties entity has been borrowing for 3 consecutive months. Consider a capital injection of ${fmt(100_000)} from HQ surplus to reduce borrowing costs by ${fmt(2_300)}/month.`}
                 </p>
               </div>
             </div>

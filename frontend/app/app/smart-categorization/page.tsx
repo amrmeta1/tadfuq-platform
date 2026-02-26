@@ -33,7 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -159,13 +159,13 @@ function StatusBadge({ status, isAr }: { status: "auto" | "review" | "manual"; i
   );
 }
 
-function DonutTooltip({ active, payload, isAr, currency }: any) {
+function DonutTooltip({ active, payload, isAr, fmt }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
     <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md min-w-[140px]">
       <p className="font-semibold mb-0.5">{isAr ? d.nameAr : d.nameEn}</p>
-      <p className="text-muted-foreground">{d.percent}% · {currency} {d.amount.toLocaleString()}</p>
+      <p className="text-muted-foreground">{d.percent}% · {fmt(d.amount)}</p>
     </div>
   );
 }
@@ -175,8 +175,7 @@ function DonutTooltip({ active, payload, isAr, currency }: any) {
 export default function SmartCategorizationPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
-  const { profile } = useCompany();
-  const currency = profile.currency ?? "SAR";
+  const { fmt } = useCurrency();
 
   const [approved, setApproved] = useState<Set<string>>(new Set());
 
@@ -309,7 +308,7 @@ export default function SmartCategorizationPage() {
                         <Cell key={c.nameEn} fill={c.color} stroke="none" />
                       ))}
                     </Pie>
-                    <Tooltip content={<DonutTooltip isAr={isAr} currency={currency} />} />
+                    <Tooltip content={<DonutTooltip isAr={isAr} fmt={fmt} />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -320,7 +319,7 @@ export default function SmartCategorizationPage() {
                     <span className="text-sm flex-1 truncate">{isAr ? c.nameAr : c.nameEn}</span>
                     <span className="text-sm font-medium tabular-nums">{c.percent}%</span>
                     <span className="text-xs text-muted-foreground tabular-nums w-28 text-end">
-                      {currency} {c.amount.toLocaleString()}
+                      {fmt(c.amount)}
                     </span>
                   </div>
                 ))}
@@ -359,7 +358,7 @@ export default function SmartCategorizationPage() {
                       "py-2.5 px-2 text-end font-semibold tabular-nums whitespace-nowrap",
                       tx.amount >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground",
                     )}>
-                      {tx.amount >= 0 ? "+" : ""}{currency} {Math.abs(tx.amount).toLocaleString()}
+                      {tx.amount >= 0 ? "+" : ""}{fmt(tx.amount)}
                     </td>
                     <td className="py-2.5 px-2">
                       <Badge variant="outline" className="text-xs font-normal">
@@ -478,7 +477,7 @@ export default function SmartCategorizationPage() {
                   <div>
                     <p className="text-sm font-medium">{isAr ? item.descAr : item.descEn}</p>
                     <p className="text-xs text-muted-foreground tabular-nums mt-0.5">
-                      {currency} {Math.abs(item.amount).toLocaleString()}
+                      {fmt(item.amount)}
                     </p>
                   </div>
                   <span className={cn(

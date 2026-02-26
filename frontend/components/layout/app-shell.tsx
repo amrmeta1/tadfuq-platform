@@ -4,14 +4,19 @@ import { useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { Navbar } from "./navbar";
+import { DemoModeBanner } from "./demo-mode-banner";
 import { useTenant } from "@/lib/hooks/use-tenant";
 import { useI18n } from "@/lib/i18n/context";
+import { useCommandMenu } from "@/lib/command-store";
 import { listTenants } from "@/lib/api/tenant-api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MustasharCopilot } from "@/components/ai/MustasharCopilot";
-import { DEV_SKIP_AUTH, getMockTenantList } from "@/lib/api/mock-data";
+import { GlobalReportDialog } from "@/components/global/global-report-dialog";
+import { DEV_SKIP_AUTH, DEMO_TENANT, getMockTenantList } from "@/lib/api/mock-data";
 
 function AppShellSkeleton() {
   return (
@@ -50,7 +55,9 @@ function AppShellSkeleton() {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const { dir } = useI18n();
+  const { dir, locale } = useI18n();
+  const { open: openCommandPalette } = useCommandMenu();
+  const isAr = locale === "ar";
   const {
     currentTenant,
     setCurrentTenant,
@@ -95,9 +102,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    if (DEV_SKIP_AUTH || !tenantList?.data) return;
+    if (DEV_SKIP_AUTH) return;
+    if (!tenantList?.data) return;
     if (tenantInitDone.current) return;
     tenantInitDone.current = true;
+
+    // Authenticated but no tenants (e.g. new user): in dev use demo tenant so pages still render
+    if (tenantList.data.length === 0 && process.env.NODE_ENV !== "production") {
+      const demoMembership = {
+        id: "demo-m",
+        tenant_id: DEMO_TENANT.id,
+        user_id: "",
+        role: "accountant_readonly" as const,
+        status: "active" as const,
+        created_at: DEMO_TENANT.created_at,
+        updated_at: DEMO_TENANT.updated_at,
+        tenant: DEMO_TENANT,
+      };
+      setMemberships([demoMembership]);
+      setCurrentTenant(DEMO_TENANT);
+      setIsLoading(false);
+      return;
+    }
 
     const membershipsWithTenant = tenantList.data.map((t) => ({
       id: t.id,
@@ -132,12 +158,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden" dir={dir}>
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
+        <DemoModeBanner tenantId={currentTenant?.id} />
         <Navbar />
         <main className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-20 [&:has([data-page-full])]:p-0 [&:has([data-page-full])]:pb-0 [&:has([data-page-full])]:overflow-hidden">
           {children}
         </main>
       </div>
       <MustasharCopilot />
+      <GlobalReportDialog />
+      {/* Ask Mustashar FAB — opens command palette (Cmd+K) */}
+      <motion.button
+        type="button"
+        onClick={openCommandPalette}
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-zinc-900 shadow-lg transition-colors hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-background"
+        style={{
+          background: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
+          boxShadow: "0 4px 24px rgba(16, 185, 129, 0.45), 0 0 0 1px rgba(255,255,255,0.1) inset",
+        }}
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.98 }}
+        aria-label={isAr ? "اسأل مستشار" : "Ask Mustashar"}
+      >
+        <Sparkles className="h-4 w-4" />
+        <span>{isAr ? "اسأل مستشار" : "Ask Mustashar"}</span>
+      </motion.button>
     </div>
   );
 }

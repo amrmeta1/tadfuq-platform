@@ -16,8 +16,7 @@ export function MarketingNavbar() {
       initial={{ opacity: 0, y: -16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className="sticky top-0 z-50 w-full backdrop-blur-md border-b"
-      style={{ background: "hsl(220 55% 5% / 0.85)", borderColor: "hsl(220 30% 12%)" }}
+      className="sticky top-0 z-50 w-full backdrop-blur-md bg-zinc-950/80 border-b border-white/10"
     >
       <div className="mx-auto max-w-6xl flex h-14 items-center justify-between px-4 md:px-6">
 
@@ -69,7 +68,7 @@ export function MarketingNavbar() {
           <Link
             href="/demo"
             className="rounded-full px-4 py-1.5 text-sm font-semibold transition-all hover:opacity-90"
-            style={{ background: "hsl(174 80% 44%)", color: "hsl(220 55% 5%)" }}
+            style={{ background: "hsl(174 100% 52%)", color: "hsl(0 0% 4%)" }}
           >
             {isAr ? "احجز عرضًا" : "Get a Demo"}
           </Link>

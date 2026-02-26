@@ -2,34 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,400&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Cairo:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    /* ── Kyriba-inspired Navy/Teal palette — light mode ── */
-    --background: 210 40% 97%;
-    --foreground: 220 60% 8%;
+    /* Enterprise zinc palette */
+    --background: 0 0% 98%;
+    --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
-    --card-foreground: 220 60% 8%;
+    --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 60% 8%;
-    /* Teal primary — Kyriba signature */
-    --primary: 174 80% 36%;
+    --popover-foreground: 240 10% 3.9%;
+    /* Subtle indigo-600 brand */
+    --primary: 243 75% 59%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 30% 94%;
-    --secondary-foreground: 220 50% 15%;
-    --muted: 210 30% 93%;
-    --muted-foreground: 215 20% 46%;
-    --accent: 174 50% 92%;
-    --accent-foreground: 174 80% 20%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
-    --border: 215 25% 87%;
-    --input: 215 25% 87%;
-    --ring: 174 80% 36%;
-    --radius: 0.5rem;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 243 75% 59%;
+    --radius: 0.375rem;
     /* Finance semantic */
-    --inflow: 142 71% 38%;
+    --inflow: 142 71% 45%;
     --outflow: 0 72% 51%;
     --sidebar-width: 220px;
     --sidebar-collapsed-width: 52px;
@@ -37,26 +37,25 @@
   }
 
   .dark {
-    /* ── Kyriba-inspired Navy/Teal palette — dark mode ── */
-    --background: 220 55% 5%;
-    --foreground: 210 30% 96%;
-    --card: 220 48% 7.5%;
-    --card-foreground: 210 30% 96%;
-    --popover: 220 48% 8%;
-    --popover-foreground: 210 30% 96%;
-    --primary: 174 80% 44%;
-    --primary-foreground: 220 55% 5%;
-    --secondary: 220 35% 13%;
-    --secondary-foreground: 210 30% 90%;
-    --muted: 220 35% 12%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 220 35% 13%;
-    --accent-foreground: 174 70% 70%;
-    --destructive: 0 65% 42%;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 5.5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 5.5%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 243 75% 63%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 30% 14%;
-    --input: 220 30% 14%;
-    --ring: 174 80% 44%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 243 75% 63%;
     --inflow: 142 71% 45%;
     --outflow: 0 72% 51%;
   }
@@ -74,7 +73,7 @@
   }
   [dir="rtl"] body,
   [dir="rtl"] {
-    font-family: 'IBM Plex Sans Arabic', 'Inter', system-ui, sans-serif;
+    font-family: 'Cairo', 'IBM Plex Sans Arabic', 'Inter', system-ui, sans-serif;
   }
   .tabular { font-variant-numeric: tabular-nums; }
 

@@ -32,9 +32,10 @@ interface InvoiceCardProps {
   receivable: Receivable;
   isAr: boolean;
   onGenerate: (r: Receivable) => void;
+  fmt: (n: number) => string;
 }
 
-function InvoiceCard({ receivable, isAr, onGenerate }: InvoiceCardProps) {
+function InvoiceCard({ receivable, isAr, onGenerate, fmt }: InvoiceCardProps) {
   const meta = BUCKET_META[receivable.status];
   const isOverdue = receivable.daysOverdue > 0;
   const clientName = isAr ? receivable.clientAr : receivable.client;
@@ -76,7 +77,7 @@ function InvoiceCard({ receivable, isAr, onGenerate }: InvoiceCardProps) {
           "text-lg font-bold tabular-nums tracking-tighter",
           receivable.status === "overdue_90" ? "text-destructive" : "text-foreground"
         )}>
-          {fmtSAR(receivable.amount)}
+          {fmt(receivable.amount)}
         </p>
 
         {/* Due status row */}
@@ -128,9 +129,10 @@ interface AgingColumnProps {
   receivables: Receivable[];
   isAr: boolean;
   onGenerate: (r: Receivable) => void;
+  fmt: (n: number) => string;
 }
 
-function AgingColumn({ bucket, receivables, isAr, onGenerate }: AgingColumnProps) {
+function AgingColumn({ bucket, receivables, isAr, onGenerate, fmt }: AgingColumnProps) {
   const meta = BUCKET_META[bucket];
   const label = meta.label[isAr ? "ar" : "en"];
   const total = receivables.reduce((s, r) => s + r.amount, 0);
@@ -150,7 +152,7 @@ function AgingColumn({ bucket, receivables, isAr, onGenerate }: AgingColumnProps
         </h3>
         {receivables.length > 0 && (
           <span className="text-[10px] tabular-nums text-muted-foreground font-medium">
-            {fmtSAR(total)}
+            {fmt(total)}
           </span>
         )}
       </div>
@@ -179,6 +181,7 @@ function AgingColumn({ bucket, receivables, isAr, onGenerate }: AgingColumnProps
               receivable={r}
               isAr={isAr}
               onGenerate={onGenerate}
+              fmt={fmt}
             />
           ))}
         </div>
@@ -192,9 +195,10 @@ function AgingColumn({ bucket, receivables, isAr, onGenerate }: AgingColumnProps
 interface AgingBoardProps {
   isAr: boolean;
   onGenerate: (r: Receivable) => void;
+  fmt: (n: number) => string;
 }
 
-export function AgingBoard({ isAr, onGenerate }: AgingBoardProps) {
+export function AgingBoard({ isAr, onGenerate, fmt }: AgingBoardProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
       {BUCKET_ORDER.map((bucket) => (
@@ -204,6 +208,7 @@ export function AgingBoard({ isAr, onGenerate }: AgingBoardProps) {
           receivables={RECEIVABLES.filter((r) => r.status === bucket)}
           isAr={isAr}
           onGenerate={onGenerate}
+          fmt={fmt}
         />
       ))}
     </div>

@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -67,20 +67,6 @@ const MONTH_NAMES_AR = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtAmount(n: number, currency: string): string {
-  const abs = Math.abs(n);
-  const formatted = abs.toLocaleString("en-US");
-  const sign = n >= 0 ? "+" : "-";
-  return `${sign}${formatted} ${currency}`;
-}
-
-function fmtCompact(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${(abs / 1_000).toFixed(0)}k`;
-  return abs.toLocaleString();
-}
-
 function eventDotColor(type: EventType): string {
   if (type === "inflow") return "bg-emerald-500";
   if (type === "outflow") return "bg-red-500";
@@ -99,9 +85,8 @@ function getFirstDayOfWeek(year: number, month: number): number {
 
 export default function CashCalendarPage() {
   const { locale, dir } = useI18n();
+  const { fmt, fmtAxis } = useCurrency();
   const isAr = locale === "ar";
-  const { profile } = useCompany();
-  const currency = profile.currency ?? "SAR";
 
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"month" | "week">("month");
@@ -250,7 +235,7 @@ export default function CashCalendarPage() {
                 {isAr ? "إجمالي التدفقات الداخلة" : "Total Inflows"}
               </p>
               <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400 mt-1" dir="ltr">
-                {totalInflows.toLocaleString()} {currency}
+                {fmt(totalInflows)}
               </p>
             </CardContent>
           </Card>
@@ -260,7 +245,7 @@ export default function CashCalendarPage() {
                 {isAr ? "إجمالي التدفقات الخارجة" : "Total Outflows"}
               </p>
               <p className="text-lg font-bold tabular-nums text-red-600 dark:text-red-400 mt-1" dir="ltr">
-                {Math.abs(totalOutflows).toLocaleString()} {currency}
+                {fmt(Math.abs(totalOutflows))}
               </p>
             </CardContent>
           </Card>
@@ -281,7 +266,7 @@ export default function CashCalendarPage() {
                 )}
                 dir="ltr"
               >
-                {netFlow >= 0 ? "+" : ""}{netFlow.toLocaleString()} {currency}
+                {fmt(netFlow)}
               </p>
             </CardContent>
           </Card>
@@ -297,8 +282,8 @@ export default function CashCalendarPage() {
                 </p>
                 <span className="text-xs text-muted-foreground">
                   {isAr
-                    ? `(أقل من ${DANGER_THRESHOLD.toLocaleString()} ${currency})`
-                    : `(below ${DANGER_THRESHOLD.toLocaleString()} ${currency})`}
+                    ? `(أقل من ${fmt(DANGER_THRESHOLD)})`
+                    : `(below ${fmt(DANGER_THRESHOLD)})`}
                 </span>
               </div>
             </CardContent>
@@ -384,7 +369,7 @@ export default function CashCalendarPage() {
                           )}
                           dir="ltr"
                         >
-                          {dayTotal >= 0 ? "+" : ""}{fmtCompact(dayTotal)}
+                          {dayTotal >= 0 ? "+" : ""}{fmtAxis(dayTotal)}
                         </span>
                       </>
                     )}
@@ -466,11 +451,11 @@ export default function CashCalendarPage() {
                       )}
                       dir="ltr"
                     >
-                      {fmtAmount(ev.amount, currency)}
+                      {fmt(ev.amount)}
                     </span>
                     <span className="text-[10px] text-muted-foreground tabular-nums mt-0.5" dir="ltr">
                       {isAr ? "الرصيد:" : "Balance:"}{" "}
-                      {selectedRunningBalances[i]?.toLocaleString()} {currency}
+                      {fmt(selectedRunningBalances[i] ?? 0)}
                     </span>
                   </div>
                 </div>
@@ -510,13 +495,13 @@ export default function CashCalendarPage() {
             <div className="rounded-lg bg-muted/50 p-4 text-sm leading-relaxed">
               {isAr ? (
                 <p>
-                  سينخفض رصيدك إلى أقل من <strong>50,000 ر.س</strong> في <strong>25 مارس</strong> بسبب
+                  سينخفض رصيدك إلى أقل من <strong>{fmt(50_000)}</strong> في <strong>25 مارس</strong> بسبب
                   الرواتب والتأمينات الاجتماعية. أنصح بطلب دفعة مبكرة من <strong>العميل ب</strong> لتجنب
                   أي ضغط على السيولة.
                 </p>
               ) : (
                 <p>
-                  Your balance will dip below <strong>SAR 50,000</strong> on{" "}
+                  Your balance will dip below <strong>{fmt(50_000)}</strong> on{" "}
                   <strong>March 25</strong> due to payroll and GOSI. Consider requesting early
                   payment from <strong>Client B</strong> to avoid a liquidity squeeze.
                 </p>

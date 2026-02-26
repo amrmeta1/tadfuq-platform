@@ -19,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -86,8 +86,7 @@ const NET_POSITIONS = [
 export default function IntercompanyNettingPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
-  const { profile } = useCompany();
-  const curr = profile.currency ?? "SAR";
+  const { fmt } = useCurrency();
 
   const [executed, setExecuted] = useState(false);
 
@@ -126,7 +125,7 @@ export default function IntercompanyNettingPage() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 {isAr ? "إجمالي الالتزامات" : "Gross Obligations"}
               </p>
-              <p className="text-2xl font-bold tabular-nums">{curr} 580,000</p>
+              <p className="text-2xl font-bold tabular-nums">{fmt(580_000)}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "١٢ دفعة" : "12 payments"}
               </p>
@@ -138,7 +137,7 @@ export default function IntercompanyNettingPage() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 {isAr ? "صافي الالتزامات" : "Net Obligations"}
               </p>
-              <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{curr} 230,000</p>
+              <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{fmt(230_000)}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "٥ دفعات فقط" : "5 payments only"}
               </p>
@@ -150,7 +149,7 @@ export default function IntercompanyNettingPage() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 {isAr ? "التوفير" : "Savings"}
               </p>
-              <p className="text-2xl font-bold tabular-nums text-violet-600 dark:text-violet-400">{curr} 350,000</p>
+              <p className="text-2xl font-bold tabular-nums text-violet-600 dark:text-violet-400">{fmt(350_000)}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "٧ دفعات أقل — تخفيض ٦٠٪" : "7 fewer payments — 60% reduction"}
               </p>
@@ -179,7 +178,7 @@ export default function IntercompanyNettingPage() {
                   <ArrowRight className="h-3.5 w-3.5 text-rose-400 shrink-0" />
                   <span className="font-medium min-w-[90px] truncate">{isAr ? p.toAr : p.to}</span>
                   <span className="ms-auto tabular-nums text-xs text-muted-foreground font-semibold shrink-0">
-                    {curr} {p.amount.toLocaleString()}
+                    {fmt(p.amount)}
                   </span>
                 </div>
               ))}
@@ -205,7 +204,7 @@ export default function IntercompanyNettingPage() {
                   <ArrowRight className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                   <span className="font-medium min-w-[90px] truncate">{isAr ? p.toAr : p.to}</span>
                   <span className="ms-auto tabular-nums text-xs text-emerald-700 dark:text-emerald-400 font-semibold shrink-0">
-                    {curr} {p.amount.toLocaleString()}
+                    {fmt(p.amount)}
                   </span>
                 </div>
               ))}
@@ -312,8 +311,8 @@ export default function IntercompanyNettingPage() {
                     {" — "}
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
                       {isAr
-                        ? `وفّر ${curr} ٢٨٠٬٠٠٠ (٨ دفعات ألغيت)`
-                        : `Saved ${curr} 280,000 (8 payments eliminated)`}
+                        ? `وفّر ${fmt(280_000)} (٨ دفعات ألغيت)`
+                        : `Saved ${fmt(280_000)} (8 payments eliminated)`}
                     </span>
                   </span>
                 </div>
@@ -353,11 +352,11 @@ export default function IntercompanyNettingPage() {
             <div className="rounded-lg bg-muted/50 p-4 text-sm leading-relaxed">
               {isAr ? (
                 <p>
-                  بتحليل ١٢ دفعة بين ٥ كيانات، تم تقليصها إلى ٥ دفعات صافية فقط — <strong>توفير ٦٠٪ في عدد المعاملات</strong> و{curr} ٣٥٠٬٠٠٠ في حجم التحويلات. المقر الرئيسي هو أكبر دافع صافي ({curr} ٦٠٬٠٠٠). أنصح بجدولة المقاصة أسبوعياً بدلاً من شهرياً لتقليل مخاطر الائتمان بين الشركات.
+                  بتحليل ١٢ دفعة بين ٥ كيانات، تم تقليصها إلى ٥ دفعات صافية فقط — <strong>توفير ٦٠٪ في عدد المعاملات</strong> و{fmt(350_000)} في حجم التحويلات. المقر الرئيسي هو أكبر دافع صافي ({fmt(60_000)}). أنصح بجدولة المقاصة أسبوعياً بدلاً من شهرياً لتقليل مخاطر الائتمان بين الشركات.
                 </p>
               ) : (
                 <p>
-                  Analyzing 12 payments across 5 entities, I reduced them to just 5 net payments — <strong>saving 60% in transaction count</strong> and {curr} 350,000 in transfer volume. HQ is the largest net payer ({curr} 60,000). I recommend scheduling netting weekly instead of monthly to reduce intercompany credit risk.
+                  Analyzing 12 payments across 5 entities, I reduced them to just 5 net payments — <strong>saving 60% in transaction count</strong> and {fmt(350_000)} in transfer volume. HQ is the largest net payer ({fmt(60_000)}). I recommend scheduling netting weekly instead of monthly to reduce intercompany credit risk.
                 </p>
               )}
             </div>

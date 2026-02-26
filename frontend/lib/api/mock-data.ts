@@ -10,23 +10,24 @@ export const DEV_SKIP_AUTH =
   process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === "true";
 
 // ── Dev skip-login: mock tenant list (no backend) ─────────────
-import type { Tenant } from "./types";
+import type { Tenant, AuditLog } from "./types";
+
+/** Default tenant for development when none is set (aligns with middleware/lib/server tenant "demo"). */
+const now = new Date().toISOString();
+export const DEMO_TENANT: Tenant = {
+  id: "demo",
+  name: "Demo",
+  slug: "demo",
+  plan: "starter",
+  status: "active",
+  metadata: null,
+  created_at: now,
+  updated_at: now,
+};
 
 export function getMockTenantList(): { data: Tenant[]; meta: { total: number; limit: number; offset: number } } {
-  const now = new Date().toISOString();
   return {
-    data: [
-      {
-        id: "00000000-0000-4000-8000-000000000001",
-        name: "Dev Company",
-        slug: "dev-company",
-        plan: "starter",
-        status: "active",
-        metadata: null,
-        created_at: now,
-        updated_at: now,
-      },
-    ],
+    data: [DEMO_TENANT],
     meta: { total: 1, limit: 20, offset: 0 },
   };
 }
@@ -122,6 +123,17 @@ export function getMockAlert(id: string) {
   const alert = MOCK_ALERTS.find((a) => a.id === id);
   if (!alert) return null;
   return { data: alert };
+}
+
+// ── Audit logs (for demo tenant) ───────────────────────────────
+
+export function getMockAuditLogs(): AuditLog[] {
+  const now = new Date();
+  return [
+    { id: "al-1", tenant_id: "demo", actor_sub: "user-demo@example.com", action: "login", entity_type: "session", entity_id: "sess-1", metadata: null, ip_address: "127.0.0.1", user_agent: "Mozilla/5.0", occurred_at: new Date(now.getTime() - 3600_000).toISOString() },
+    { id: "al-2", tenant_id: "demo", actor_sub: "user-demo@example.com", action: "member.invite", entity_type: "membership", entity_id: "mem-1", metadata: null, ip_address: "127.0.0.1", user_agent: "Mozilla/5.0", occurred_at: new Date(now.getTime() - 7200_000).toISOString() },
+    { id: "al-3", tenant_id: "demo", actor_sub: "user-demo@example.com", action: "tenant.update", entity_type: "tenant", entity_id: "demo", metadata: null, ip_address: "127.0.0.1", user_agent: "Mozilla/5.0", occurred_at: new Date(now.getTime() - 86400_000).toISOString() },
+  ];
 }
 
 // ── Agents ────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   Printer,
   Download,
@@ -42,12 +43,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
+import { TimeRangeButtons, type TimeRangeKey } from "@/components/charts/TimeRangeButtons";
+import { RechartsTooltipGlass } from "@/components/charts/ChartTooltipGlass";
 
-// ── Data ─────────────────────────────────────────────────────────────────────
+// ── Executive report mock (period-driven) ────────────────────────────────────
 
-const CASH_TREND = [
+const CASH_TREND_FULL = [
   { month: "Sep", monthAr: "سبتمبر", balance: 3200000 },
   { month: "Oct", monthAr: "أكتوبر", balance: 3500000 },
   { month: "Nov", monthAr: "نوفمبر", balance: 3800000 },
@@ -56,7 +59,7 @@ const CASH_TREND = [
   { month: "Feb", monthAr: "فبراير", balance: 4820000 },
 ];
 
-const REVENUE_VS_EXPENSES = [
+const REVENUE_VS_EXPENSES_FULL = [
   { month: "Sep", monthAr: "سبتمبر", revenue: 890000, expenses: 720000 },
   { month: "Oct", monthAr: "أكتوبر", revenue: 950000, expenses: 780000 },
   { month: "Nov", monthAr: "نوفمبر", revenue: 1020000, expenses: 810000 },
@@ -64,6 +67,37 @@ const REVENUE_VS_EXPENSES = [
   { month: "Jan", monthAr: "يناير", revenue: 1100000, expenses: 920000 },
   { month: "Feb", monthAr: "فبراير", revenue: 1230000, expenses: 980000 },
 ];
+
+function sliceByRange<T>(arr: T[], range: TimeRangeKey): T[] {
+  if (range === "3m") return arr.slice(-3);
+  if (range === "6m") return arr;
+  if (range === "12m" || range === "all") return arr;
+  return arr;
+}
+
+/** Mock KPIs and narrative for executive report by time range */
+function getExecutiveReportMock(range: TimeRangeKey, fmt: (n: number) => string) {
+  const slice = sliceByRange(CASH_TREND_FULL, range);
+  const openingBalance = slice[0]?.balance ?? 0;
+  const closingBalance = slice[slice.length - 1]?.balance ?? 0;
+  const netFlow = closingBalance - openingBalance;
+  const revSlice = sliceByRange(REVENUE_VS_EXPENSES_FULL, range);
+  const totalRevenue = revSlice.reduce((s, r) => s + r.revenue, 0);
+  const totalExpenses = revSlice.reduce((s, r) => s + r.expenses, 0);
+  const txCount = range === "3m" ? 1240 : range === "6m" ? 2680 : 5200;
+  return {
+    openingBalance,
+    closingBalance,
+    netFlow,
+    totalRevenue,
+    totalExpenses,
+    transactionCount: txCount,
+    runwayMonths: 8.3,
+    healthScore: 82,
+    narrativeEn: `Over the selected period, closing balance reached ${fmt(closingBalance)}, with net cash flow of ${netFlow >= 0 ? "+" : ""}${fmt(netFlow)}. Revenue totaled ${fmt(totalRevenue)} and expenses ${fmt(totalExpenses)}; runway remains ${range === "3m" ? "8.2" : "8.3"} months.`,
+    narrativeAr: `خلال الفترة المختارة، بلغ الرصيد الختامي ${fmt(closingBalance)}، وصافي التدفق النقدي ${netFlow >= 0 ? "+" : ""}${fmt(netFlow)}. إجمالي الإيرادات ${fmt(totalRevenue)} والمصروفات ${fmt(totalExpenses)}؛ فترة التشغيل ${range === "3m" ? "٨.٢" : "٨.٣"} أشهر.`,
+  };
+}
 
 interface Entity {
   nameEn: string;
@@ -89,9 +123,16 @@ interface Risk {
   ar: string;
 }
 
-const RISKS: Risk[] = [
-  { severity: "high", en: "Payroll + GOSI due in 3 days (SAR 101,000). Ensure funds in payroll account.", ar: "الرواتب + التأمينات مستحقة خلال ٣ أيام (١٠١,٠٠٠ ر.س). تأكد من توفر الأموال في حساب الرواتب." },
-  { severity: "medium", en: "Overdue receivable SAR 28,000 from Supplier X (7 days late). Escalate collection.", ar: "مستحقات متأخرة ٢٨,٠٠٠ ر.س من المورد X (متأخرة ٧ أيام). صعّد التحصيل." },
+interface RiskData {
+  severity: "high" | "medium" | "low";
+  amount?: number;
+  en: string;
+  ar: string;
+}
+
+const RISKS: RiskData[] = [
+  { severity: "high", amount: 101_000, en: "Payroll + GOSI due in 3 days ({amt}). Ensure funds in payroll account.", ar: "الرواتب + التأمينات مستحقة خلال ٣ أيام ({amt}). تأكد من توفر الأموال في حساب الرواتب." },
+  { severity: "medium", amount: 28_000, en: "Overdue receivable {amt} from Supplier X (7 days late). Escalate collection.", ar: "مستحقات متأخرة {amt} من المورد X (متأخرة ٧ أيام). صعّد التحصيل." },
   { severity: "low", en: "USD/SAR rate favorable for FX-denominated contracts. Consider locking rate.", ar: "سعر صرف USD/SAR مناسب للعقود بالعملات الأجنبية. فكّر في تثبيت السعر." },
 ];
 
@@ -111,12 +152,6 @@ const AGENTS: AgentSummary[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtM(n: number): string {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(2)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
-  return n.toLocaleString();
-}
-
 function healthColor(h: number): string {
   if (h >= 75) return "text-emerald-600 dark:text-emerald-400";
   if (h >= 60) return "text-amber-600 dark:text-amber-400";
@@ -129,50 +164,75 @@ function healthDot(h: number): string {
   return "🔴";
 }
 
-function severityConfig(s: Risk["severity"]) {
+function severityConfig(s: RiskData["severity"]) {
   if (s === "high") return { dot: "🔴", label: "HIGH", labelAr: "عالي", border: "border-rose-200 dark:border-rose-900/50", bg: "bg-rose-50/50 dark:bg-rose-950/20", text: "text-rose-700 dark:text-rose-400" };
   if (s === "medium") return { dot: "🟡", label: "MEDIUM", labelAr: "متوسط", border: "border-amber-200 dark:border-amber-900/50", bg: "bg-amber-50/50 dark:bg-amber-950/20", text: "text-amber-700 dark:text-amber-400" };
   return { dot: "🟢", label: "LOW", labelAr: "منخفض", border: "border-emerald-200 dark:border-emerald-900/50", bg: "bg-emerald-50/50 dark:bg-emerald-950/20", text: "text-emerald-700 dark:text-emerald-400" };
 }
 
-// ── Tooltip Components ───────────────────────────────────────────────────────
-
-function CashTrendTooltip({ active, payload, label, currency }: any) {
-  if (!active || !payload?.length) return null;
+// ── Tooltip: premium glass (month Arabic, main value, % change, sub line) ─────
+function CashTrendTooltipContent({ active, payload, label, fmt, data, isAr }: any) {
+  if (!active || !payload?.length || !label) return null;
+  const idx = data?.findIndex((d: any) => (d.month === label || d.monthAr === label)) ?? -1;
+  const row = idx >= 0 ? data?.[idx] : null;
+  const prevBalance = idx > 0 && data?.[idx - 1] ? data[idx - 1].balance : undefined;
+  const currBalance = row?.balance;
+  const pctChange =
+    prevBalance != null && prevBalance !== 0 && currBalance != null
+      ? ((currBalance - prevBalance) / prevBalance) * 100
+      : undefined;
+  const labelFormatted = isAr && row?.monthAr ? `${row.monthAr} 2026` : `${label} 2026`;
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs">
-      <p className="font-semibold mb-0.5">{label}</p>
-      <p className="tabular-nums font-medium text-indigo-600 dark:text-indigo-400">
-        {currency} {Number(payload[0]?.value).toLocaleString()}
-      </p>
-    </div>
+    <RechartsTooltipGlass
+      active={active}
+      payload={payload}
+      label={labelFormatted}
+      fmt={fmt}
+      pctChange={pctChange}
+      mainValue={currBalance}
+      isPremium
+    />
   );
 }
 
-function RevenueExpenseTooltip({ active, payload, label, currency, isAr }: any) {
+function RevenueExpenseTooltipContent({ active, payload, label, fmt, isAr }: any) {
   if (!active || !payload?.length) return null;
+  const revenue = payload.find((p: any) => p.dataKey === "revenue")?.value ?? 0;
+  const expenses = payload.find((p: any) => p.dataKey === "expenses")?.value ?? 0;
+  const subLine = isAr
+    ? `الإيرادات: ${fmt(revenue)} | المصروفات: ${fmt(expenses)}`
+    : `Revenue: ${fmt(revenue)} | Expenses: ${fmt(expenses)}`;
+  const labelFormatted = `${label} 2026`;
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs min-w-[140px]">
-      <p className="font-semibold mb-1">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.dataKey} className="tabular-nums flex justify-between gap-4">
-          <span style={{ color: p.color }}>
-            {p.dataKey === "revenue" ? (isAr ? "الإيرادات" : "Revenue") : (isAr ? "المصروفات" : "Expenses")}
-          </span>
-          <span className="font-medium">{currency} {Number(p.value).toLocaleString()}</span>
-        </p>
-      ))}
-    </div>
+    <RechartsTooltipGlass
+      active={active}
+      payload={payload.map((p: any) => ({
+        ...p,
+        name: p.dataKey === "revenue" ? (isAr ? "الإيرادات" : "Revenue") : (isAr ? "المصروفات" : "Expenses"),
+      }))}
+      label={labelFormatted}
+      fmt={fmt}
+      mainValue={revenue}
+      subLine={subLine}
+      isPremium
+    />
   );
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
+const PERIOD_LABEL: Record<TimeRangeKey, { en: string; ar: string }> = {
+  "3m": { en: "Last 3 Months", ar: "آخر ٣ أشهر" },
+  "6m": { en: "Last 6 Months", ar: "آخر ٦ أشهر" },
+  "12m": { en: "Last 12 Months", ar: "آخر ١٢ شهر" },
+  all: { en: "All", ar: "الكل" },
+};
+
 export default function ExecutiveReportPage() {
   const { locale, dir } = useI18n();
-  const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  const { fmt } = useCurrency();
   const isAr = locale === "ar";
+  const [timeRange, setTimeRange] = useState<TimeRangeKey>("6m");
 
   const now = new Date();
   const generatedDate = isAr
@@ -180,17 +240,28 @@ export default function ExecutiveReportPage() {
     : now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const generatedTime = now.toLocaleTimeString(isAr ? "ar-SA" : "en-US", { hour: "2-digit", minute: "2-digit" });
 
-  const cashTrendData = CASH_TREND.map((d) => ({ ...d, month: isAr ? d.monthAr : d.month }));
-  const revExpData = REVENUE_VS_EXPENSES.map((d) => ({ ...d, month: isAr ? d.monthAr : d.month }));
+  const mock = useMemo(() => getExecutiveReportMock(timeRange, fmt), [timeRange, fmt]);
+  const cashTrendData = useMemo(
+    () => sliceByRange(CASH_TREND_FULL, timeRange).map((d) => ({ ...d, month: isAr ? d.monthAr : d.month })),
+    [timeRange, isAr]
+  );
+  const revExpData = useMemo(
+    () => sliceByRange(REVENUE_VS_EXPENSES_FULL, timeRange).map((d) => ({ ...d, month: isAr ? d.monthAr : d.month })),
+    [timeRange, isAr]
+  );
 
-  const kpis = [
-    { labelEn: "Total Cash", labelAr: "إجمالي النقد", value: `${curr} 4,820,000`, change: "+8.3%", positive: true },
-    { labelEn: "Monthly Revenue", labelAr: "الإيرادات الشهرية", value: `${curr} 1,230,000`, change: "+12%", positive: true },
-    { labelEn: "Monthly Expenses", labelAr: "المصروفات الشهرية", value: `${curr} 980,000`, change: "-3.1%", positive: true },
-    { labelEn: "Net Cash Flow", labelAr: "صافي التدفق النقدي", value: `+${curr} 250,000`, change: null, positive: true },
-    { labelEn: "Runway", labelAr: "فترة التشغيل", value: isAr ? "٨.٣ أشهر" : "8.3 months", change: isAr ? "مستقر" : "Stable", positive: true },
-    { labelEn: "Health Score", labelAr: "مؤشر الصحة المالية", value: "82/100", change: isAr ? "جيد" : "Good", positive: true },
-  ];
+  const periodLabel = PERIOD_LABEL[timeRange];
+  const kpis = useMemo(
+    () => [
+      { labelEn: "Opening Balance", labelAr: "الرصيد الافتتاحي", value: fmt(mock.openingBalance), change: null, positive: true },
+      { labelEn: "Closing Balance", labelAr: "الرصيد الختامي", value: fmt(mock.closingBalance), change: "+8.3%", positive: true },
+      { labelEn: "Net Cash Flow", labelAr: "صافي التدفق النقدي", value: (mock.netFlow >= 0 ? "+" : "") + fmt(mock.netFlow), change: null, positive: mock.netFlow >= 0 },
+      { labelEn: "Transactions", labelAr: "عدد المعاملات", value: mock.transactionCount.toLocaleString(), change: null, positive: true },
+      { labelEn: "Runway", labelAr: "فترة التشغيل", value: isAr ? `${mock.runwayMonths} أشهر` : `${mock.runwayMonths} months`, change: isAr ? "مستقر" : "Stable", positive: true },
+      { labelEn: "Health Score", labelAr: "مؤشر الصحة المالية", value: `${mock.healthScore}/100`, change: isAr ? "جيد" : "Good", positive: true },
+    ],
+    [mock, fmt, isAr]
+  );
 
   return (
     <div dir={dir} className="flex flex-col h-full overflow-y-auto bg-background">
@@ -217,12 +288,15 @@ export default function ExecutiveReportPage() {
               <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
                 {isAr ? "التقرير التنفيذي للخزينة" : "Executive Treasury Report"}
               </h1>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                <span>{isAr ? "الفترة: فبراير ٢٠٢٦" : "Period: February 2026"}</span>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <span>{isAr ? periodLabel.ar : periodLabel.en}</span>
                 <span className="hidden sm:inline">·</span>
                 <span suppressHydrationWarning>
                   {isAr ? "تاريخ الإصدار:" : "Generated:"} {generatedDate}, {generatedTime}
                 </span>
+              </div>
+              <div className="mt-2 no-print">
+                <TimeRangeButtons value={timeRange} onChange={setTimeRange} isAr={isAr} />
               </div>
             </div>
             <div className="flex items-center gap-2 no-print">
@@ -243,19 +317,17 @@ export default function ExecutiveReportPage() {
           <div className="h-px bg-border" />
         </div>
 
-        {/* ═══ 2. EXECUTIVE SUMMARY ═══ */}
+        {/* ═══ 2. EXECUTIVE SUMMARY (Mustashar / ملخص تنفيذي) ───────────────── */}
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <FileText className="h-4 w-4 text-muted-foreground" />
-              {isAr ? "الملخص التنفيذي" : "Executive Summary"}
+              {isAr ? "ملخص تنفيذي" : "Executive Summary"}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm leading-relaxed text-foreground/90">
-              {isAr
-                ? "تبقى السيولة الجماعية قوية عند ٤.٨٢ مليون ر.س، بارتفاع ٨.٣٪ عن يناير. نمت الإيرادات بنسبة ١٢٪ على أساس شهري مدفوعة بمخرجات مشروع ألفا. تبلغ فترة التشغيل النقدي ٨.٣ أشهر. المخاطر الرئيسية: ١٠١,٠٠٠ ر.س رواتب مستحقة خلال ٣ أيام مع ٢٨,٠٠٠ ر.س مستحقات متأخرة من المورد X. توصي أنظمة الذكاء الاصطناعي بطلب دفعة مبكرة من العميل ب ومراقبة تعرض العملات الأجنبية في العقود المقومة بالدولار."
-                : "Group liquidity remains strong at SAR 4.82M, up 8.3% from January. Revenue grew 12% MoM driven by Project Alpha deliverables. Cash runway stands at 8.3 months. Key risk: SAR 101K payroll due in 3 days combined with SAR 28K overdue receivable from Supplier X. AI agents recommend requesting early payment from Client B and monitoring FX exposure on USD-denominated contracts."}
+              {isAr ? mock.narrativeAr : mock.narrativeEn}
             </p>
           </CardContent>
         </Card>
@@ -297,7 +369,7 @@ export default function ExecutiveReportPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              {isAr ? "اتجاه النقد — آخر ٦ أشهر" : "Cash Trend — Last 6 Months"}
+              {isAr ? `اتجاه النقد — ${periodLabel.ar}` : `Cash Trend — ${periodLabel.en}`}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -306,21 +378,21 @@ export default function ExecutiveReportPage() {
                 <AreaChart data={cashTrendData} margin={{ top: 8, right: 16, left: 16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="cashGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(239 84% 67%)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(239 84% 67%)" stopOpacity={0.02} />
+                      <stop offset="5%" stopColor="hsl(142 71% 45%)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(142 71% 45%)" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }} axisLine={false} tickLine={false} />
                   <YAxis tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }} axisLine={false} tickLine={false} width={50} />
-                  <Tooltip content={<CashTrendTooltip currency={curr} />} />
+                  <Tooltip content={<CashTrendTooltipContent fmt={fmt} data={cashTrendData} isAr={isAr} />} cursor={{ fill: "hsl(142 71% 45% / 0.08)", radius: 4 }} />
                   <Area
                     type="monotone"
                     dataKey="balance"
-                    stroke="hsl(239 84% 67%)"
+                    stroke="hsl(142 71% 45%)"
                     strokeWidth={2.5}
                     fill="url(#cashGrad)"
-                    dot={{ r: 4, fill: "var(--background)", stroke: "hsl(239 84% 67%)", strokeWidth: 2 }}
+                    dot={{ r: 4, fill: "var(--background)", stroke: "hsl(142 71% 45%)", strokeWidth: 2 }}
                     activeDot={{ r: 6, strokeWidth: 2 }}
                   />
                 </AreaChart>
@@ -334,7 +406,7 @@ export default function ExecutiveReportPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              {isAr ? "الإيرادات مقابل المصروفات — آخر ٦ أشهر" : "Revenue vs Expenses — Last 6 Months"}
+              {isAr ? `الإيرادات مقابل المصروفات — ${periodLabel.ar}` : `Revenue vs Expenses — ${periodLabel.en}`}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -344,7 +416,7 @@ export default function ExecutiveReportPage() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
                   <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }} axisLine={false} tickLine={false} />
                   <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }} axisLine={false} tickLine={false} width={50} />
-                  <Tooltip content={<RevenueExpenseTooltip currency={curr} isAr={isAr} />} />
+                  <Tooltip content={<RevenueExpenseTooltipContent fmt={fmt} isAr={isAr} />} cursor={{ fill: "hsl(142 71% 45% / 0.08)", radius: 4 }} />
                   <Legend
                     formatter={(value) => (
                       <span className="text-xs font-medium">
@@ -383,9 +455,9 @@ export default function ExecutiveReportPage() {
                 {ENTITIES.map((e) => (
                   <TableRow key={e.nameEn}>
                     <TableCell className="font-medium text-sm">{isAr ? e.nameAr : e.nameEn}</TableCell>
-                    <TableCell className="text-end tabular-nums text-sm">{curr} {fmtM(e.balance)}</TableCell>
-                    <TableCell className="text-end tabular-nums text-sm">{fmtM(e.revenue)}</TableCell>
-                    <TableCell className="text-end tabular-nums text-sm">{fmtM(e.expenses)}</TableCell>
+                    <TableCell className="text-end tabular-nums text-sm">{fmt(e.balance)}</TableCell>
+                    <TableCell className="text-end tabular-nums text-sm">{fmt(e.revenue)}</TableCell>
+                    <TableCell className="text-end tabular-nums text-sm">{fmt(e.expenses)}</TableCell>
                     <TableCell className="text-center">
                       <span className={cn("font-semibold text-sm", healthColor(e.health))}>
                         {e.health} {healthDot(e.health)}
@@ -421,7 +493,9 @@ export default function ExecutiveReportPage() {
                         {isAr ? cfg.labelAr : cfg.label}
                       </Badge>
                       <p className="text-sm leading-relaxed">
-                        {isAr ? risk.ar : risk.en}
+                        {risk.amount != null
+                          ? (isAr ? risk.ar : risk.en).replace("{amt}", fmt(risk.amount))
+                          : (isAr ? risk.ar : risk.en)}
                       </p>
                     </div>
                   </CardContent>

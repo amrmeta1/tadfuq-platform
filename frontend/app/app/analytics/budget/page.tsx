@@ -23,14 +23,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { useBudgetVsActual, useUpdateBudget } from "@/features/analytics/hooks";
 import { getAvailablePeriods } from "@/features/analytics/mock-api";
 import type { BudgetLine } from "@/features/analytics/types";
 import type { Category } from "@/features/transactions/types";
 
-function ChartTooltip({ active, payload, label, locale }: any) {
+function ChartTooltip({ active, payload, label, fmt }: any) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs min-w-[160px]">
@@ -39,7 +39,7 @@ function ChartTooltip({ active, payload, label, locale }: any) {
         <div key={p.dataKey} className="flex justify-between gap-4 mb-0.5">
           <span className="text-muted-foreground">{p.name}</span>
           <span className={cn("font-medium tabular-nums", p.dataKey === "actual" ? "text-foreground" : "text-muted-foreground")}>
-            {formatCurrency(p.value, "SAR", locale)}
+            {fmt(p.value)}
           </span>
         </div>
       ))}
@@ -50,12 +50,12 @@ function ChartTooltip({ active, payload, label, locale }: any) {
 interface EditableBudgetRowProps {
   line: BudgetLine;
   isAr: boolean;
-  locale: string;
+  fmt: (amountInSAR: number) => string;
   onSave: (category: Category, budget: number) => void;
   isPending: boolean;
 }
 
-function EditableBudgetRow({ line, isAr, locale, onSave, isPending }: EditableBudgetRowProps) {
+function EditableBudgetRow({ line, isAr, fmt, onSave, isPending }: EditableBudgetRowProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(line.budget));
 
@@ -107,7 +107,7 @@ function EditableBudgetRow({ line, isAr, locale, onSave, isPending }: EditableBu
         ) : (
           <div className="flex items-center gap-1.5 group">
             <span className="tabular-nums text-sm text-muted-foreground">
-              {formatCurrency(line.budget, "SAR", locale)}
+              {fmt(line.budget)}
             </span>
             <Button
               size="icon"
@@ -124,7 +124,7 @@ function EditableBudgetRow({ line, isAr, locale, onSave, isPending }: EditableBu
       {/* Actual */}
       <td className="px-4 py-2.5">
         <span className="tabular-nums text-sm font-medium">
-          {formatCurrency(line.actual, "SAR", locale)}
+          {fmt(line.actual)}
         </span>
       </td>
 
@@ -136,7 +136,7 @@ function EditableBudgetRow({ line, isAr, locale, onSave, isPending }: EditableBu
             : <TrendingDown className="h-3.5 w-3.5 text-emerald-600" />
           }
           <span className={cn("tabular-nums text-sm font-medium", overBudget ? "text-rose-600" : "text-emerald-600")}>
-            {overBudget ? "+" : ""}{formatCurrency(line.variance, "SAR", locale)}
+            {overBudget ? "+" : ""}{fmt(line.variance)}
           </span>
         </div>
       </td>
@@ -168,6 +168,7 @@ export default function BudgetPage() {
   const { locale, dir } = useI18n();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
+  const { fmt, fmtAxis } = useCurrency();
   const isAr = locale === "ar";
 
   const periods = getAvailablePeriods();
@@ -272,12 +273,9 @@ export default function BudgetPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-sm font-normal text-muted-foreground">SAR</span>
-                  <span className={cn("text-xl font-semibold tracking-tight tabular-nums", kpi.color)}>
-                    {(kpi as any).prefix ?? ""}{formatCurrency(kpi.value, "SAR", locale).replace("SAR", "").trim()}
-                  </span>
-                </div>
+                <span className={cn("text-xl font-semibold tracking-tight tabular-nums", kpi.color)}>
+                  {(kpi as any).prefix ?? ""}{fmt(kpi.value)}
+                </span>
               </CardContent>
             </Card>
           ))}
@@ -313,9 +311,9 @@ export default function BudgetPage() {
                     axisLine={false}
                     tickLine={false}
                     width={48}
-                    tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
+                    tickFormatter={(v: number) => fmtAxis(v)}
                   />
-                  <Tooltip content={<ChartTooltip locale={locale} />} />
+                  <Tooltip content={<ChartTooltip fmt={fmt} />} />
                   <Bar dataKey="budget" name={isAr ? "الميزانية" : "Budget"} fill="hsl(240 5.9% 78%)" radius={[3, 3, 0, 0]} maxBarSize={24} />
                   <Bar dataKey="actual" name={isAr ? "الفعلي" : "Actual"} radius={[3, 3, 0, 0]} maxBarSize={24}>
                     {chartData.map((entry, i) => (
@@ -372,7 +370,7 @@ export default function BudgetPage() {
                       key={line.id}
                       line={line}
                       isAr={isAr}
-                      locale={locale}
+                      fmt={fmt}
                       onSave={handleSave}
                       isPending={updateMutation.isPending}
                     />
@@ -381,11 +379,11 @@ export default function BudgetPage() {
                 <tfoot className="border-t bg-muted/30">
                   <tr>
                     <td className="px-4 py-2.5 text-sm font-semibold">{isAr ? "الإجمالي" : "Total"}</td>
-                    <td className="px-4 py-2.5 text-sm text-muted-foreground tabular-nums">{formatCurrency(totalBudget, "SAR", locale)}</td>
-                    <td className="px-4 py-2.5 text-sm font-semibold tabular-nums">{formatCurrency(totalActual, "SAR", locale)}</td>
+                    <td className="px-4 py-2.5 text-sm text-muted-foreground tabular-nums">{fmt(totalBudget)}</td>
+                    <td className="px-4 py-2.5 text-sm font-semibold tabular-nums">{fmt(totalActual)}</td>
                     <td className="px-4 py-2.5">
                       <span className={cn("text-sm font-semibold tabular-nums", totalVariance > 0 ? "text-rose-600" : "text-emerald-600")}>
-                        {totalVariance > 0 ? "+" : ""}{formatCurrency(totalVariance, "SAR", locale)}
+                        {totalVariance > 0 ? "+" : ""}{fmt(totalVariance)}
                       </span>
                     </td>
                     <td className="px-4 py-2.5">
@@ -424,7 +422,7 @@ export default function BudgetPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <p className="text-2xl font-bold tabular-nums tracking-tighter">SAR 1,380,000</p>
+            <p className="text-2xl font-bold tabular-nums tracking-tighter">{fmt(1_380_000)}</p>
             <p className="text-xs text-muted-foreground mt-1">{isAr ? "السنة المالية 2026" : "FY 2026"}</p>
           </CardContent>
         </Card>
@@ -436,7 +434,7 @@ export default function BudgetPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-4 pb-4">
-            <p className="text-2xl font-bold tabular-nums tracking-tighter">SAR 337,000</p>
+            <p className="text-2xl font-bold tabular-nums tracking-tighter">{fmt(337_000)}</p>
             <p className="text-xs text-muted-foreground mt-1">{isAr ? "نهاية فبراير — الربع الأول" : "End of February — Q1"}</p>
           </CardContent>
         </Card>

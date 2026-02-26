@@ -18,6 +18,14 @@ const ROLES: { role: Role; description: string }[] = [
   { role: "owner", description: "Manage members and view all data" },
   { role: "finance_manager", description: "Read access plus audit logs" },
   { role: "accountant_readonly", description: "Read-only access to tenant data" },
+  { role: "group_cfo", description: "Full access across all entities" },
+  { role: "treasury_director", description: "Treasury, FX, forecasts" },
+  { role: "financial_controller", description: "Single entity scope (read)" },
+  { role: "ap_manager", description: "Payables workflows only" },
+  { role: "ar_manager", description: "Receivables workflows only" },
+  { role: "bank_relationship_manager", description: "Bank accounts read only" },
+  { role: "auditor_readonly", description: "Full read + audit log export" },
+  { role: "board_member", description: "Executive summary only" },
 ];
 
 export default function RolesPage() {

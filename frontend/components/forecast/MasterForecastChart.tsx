@@ -37,32 +37,14 @@ export interface CashflowMonthPoint {
 
 interface MasterForecastChartProps {
   data: CashflowMonthPoint[];
-  currency: string;
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function fmt(n: number | null | undefined, currency: string): string {
-  if (n == null) return "—";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}${currency} ${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}${currency} ${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}${currency} ${abs.toLocaleString()}`;
+  fmt: (n: number) => string;
+  fmtAxis: (n: number) => string;
+  currCode: string;
 }
 
 // ── Custom tooltip ────────────────────────────────────────────────────────────
 
-function fmtValue(n: number | null | undefined): string {
-  if (n == null) return "—";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}${abs.toLocaleString()}`;
-}
-
-function ChartTooltip({ active, payload, label, currency, isAr }: any) {
+function ChartTooltip({ active, payload, label, fmt, isAr }: { active?: boolean; payload?: any[]; label?: string; fmt: (n: number) => string; isAr: boolean }) {
   if (!active || !payload?.length) return null;
   const rows = payload.filter((p: any) => p.value != null && p.value !== 0);
   return (
@@ -76,7 +58,7 @@ function ChartTooltip({ active, payload, label, currency, isAr }: any) {
               <span className="text-xs text-muted-foreground">{p.name}</span>
             </div>
             <span dir="ltr" className="font-mono text-xs font-medium tabular-nums" style={{ color: p.color }} suppressHydrationWarning>
-              {fmtValue(p.value)} {currency}
+              {fmt(p.value)}
             </span>
           </div>
         ))}
@@ -87,7 +69,7 @@ function ChartTooltip({ active, payload, label, currency, isAr }: any) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function MasterForecastChart({ data, currency }: MasterForecastChartProps) {
+export function MasterForecastChart({ data, fmt, fmtAxis, currCode }: MasterForecastChartProps) {
   const { locale } = useI18n();
   const isAr = locale === "ar";
 
@@ -129,16 +111,10 @@ export function MasterForecastChart({ data, currency }: MasterForecastChartProps
           tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v: number) => {
-            const abs = Math.abs(v);
-            const sign = v < 0 ? "-" : "";
-            if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`;
-            if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}k`;
-            return String(v);
-          }}
+          tickFormatter={fmtAxis}
         />
 
-        <Tooltip content={<ChartTooltip currency={currency} isAr={isAr} />} />
+        <Tooltip content={<ChartTooltip fmt={fmt} isAr={isAr} />} key={currCode} />
 
         <Legend
           iconType="circle"

@@ -21,6 +21,7 @@ import {
   ArrowLeftRight,
   Bell,
   FileText,
+  Upload,
   Target,
   Calendar,
   CalendarDays,
@@ -39,6 +40,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
+import { useEntity } from "@/contexts/EntityContext";
 import type { LucideIcon } from "lucide-react";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 
@@ -72,6 +74,7 @@ const OPERATIONS: NavItem[] = [
 
 const COMPLIANCE: NavItem[] = [
   { navKey: "transactions", icon: ArrowLeftRight, href: "/app/transactions" },
+  { navKey: "import", icon: Upload, href: "/app/import" },
   { navKey: "alerts", icon: Bell, href: "/app/alerts" },
   { navKey: "reports", icon: FileText, href: "/app/reports" },
   { navKey: "budget", icon: Target, href: "/app/analytics/budget" },
@@ -90,6 +93,23 @@ const ENTERPRISE: NavItem[] = [
   { navKey: "smartCategorization", icon: Brain, href: "/app/smart-categorization", highlighted: true },
   { navKey: "sessionManagement", icon: Monitor, href: "/app/sessions", highlighted: true },
 ];
+
+function EntityLabel() {
+  const { locale } = useI18n();
+  const { selectedId, selectedEntity } = useEntity();
+  const isAr = locale === "ar";
+  const label =
+    selectedId === "consolidated"
+      ? isAr ? "موحّد" : "Consolidated"
+      : selectedEntity
+        ? isAr ? selectedEntity.nameAr : selectedEntity.nameEn
+        : "—";
+  return (
+    <span className="truncate max-w-[100px] text-xs text-muted-foreground font-medium">
+      {label}
+    </span>
+  );
+}
 
 function NavSection({
   title,
@@ -180,7 +200,7 @@ export function Sidebar() {
       data-sidebar
       className="hidden md:flex flex-col w-[260px] border-e bg-card shrink-0 print:hidden overflow-hidden"
     >
-      {/* ── Brand + Entity Switcher ── */}
+      {/* ── Brand + Entity label (switcher is in navbar) ── */}
       <div className="flex h-14 items-center border-b px-3 gap-2.5 shrink-0">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white font-bold text-xs">
           T
@@ -191,13 +211,7 @@ export function Sidebar() {
               Tadfuq<span className="text-emerald-600">.ai</span>
             </p>
           </div>
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted transition-colors shrink-0"
-          >
-            <span className="truncate max-w-[80px]">HQ Hub</span>
-            <ChevronDown className="h-3 w-3 shrink-0" />
-          </button>
+          <EntityLabel />
         </div>
       </div>
 

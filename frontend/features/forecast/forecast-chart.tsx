@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import type { SimulatedDay } from "./use-forecast-simulation";
 
 // ── Custom Tooltip ──────────────────────────────────────────────────────────
@@ -21,11 +21,11 @@ interface TooltipProps {
   active?: boolean;
   payload?: Array<{ dataKey: string; value: number; name: string }>;
   label?: string;
-  locale: string;
+  fmt: (n: number) => string;
   isAr: boolean;
 }
 
-function ForecastTooltip({ active, payload, label, locale, isAr }: TooltipProps) {
+function ForecastTooltip({ active, payload, label, fmt, isAr }: TooltipProps) {
   if (!active || !payload?.length) return null;
 
   const base = payload.find((p) => p.dataKey === "baseBalance")?.value ?? 0;
@@ -42,7 +42,7 @@ function ForecastTooltip({ active, payload, label, locale, isAr }: TooltipProps)
           {isAr ? "الأساسي" : "Base"}
         </span>
         <span className="font-medium tabular-nums text-foreground">
-          {formatCurrency(base, "SAR", locale)}
+          {fmt(base)}
         </span>
       </div>
 
@@ -52,14 +52,14 @@ function ForecastTooltip({ active, payload, label, locale, isAr }: TooltipProps)
           {isAr ? "المحاكاة" : "Simulated"}
         </span>
         <span className={cn("font-semibold tabular-nums", sim < 0 ? "outflow" : "text-foreground")}>
-          {formatCurrency(sim, "SAR", locale)}
+          {fmt(sim)}
         </span>
       </div>
 
       <div className="border-t pt-1.5 flex justify-between gap-4">
         <span className="text-muted-foreground">{isAr ? "الفارق" : "Variance"}</span>
         <span className={cn("font-semibold tabular-nums", variance >= 0 ? "inflow" : "outflow")}>
-          {variance >= 0 ? "+" : ""}{formatCurrency(variance, "SAR", locale)}
+          {variance >= 0 ? "+" : ""}{fmt(variance)}
         </span>
       </div>
     </div>
@@ -70,13 +70,15 @@ function ForecastTooltip({ active, payload, label, locale, isAr }: TooltipProps)
 
 interface ForecastChartProps {
   data: SimulatedDay[];
-  locale: string;
+  fmt: (n: number) => string;
+  fmtAxis?: (n: number) => string;
   isAr: boolean;
 }
 
-export function ForecastChart({ data, locale, isAr }: ForecastChartProps) {
+export function ForecastChart({ data, fmt, fmtAxis, isAr }: ForecastChartProps) {
   // Sample every 3rd day to keep X-axis readable (60 ticks → 20)
   const tickDays = new Set(data.filter((_, i) => i % 3 === 0).map((d) => d.label));
+  const axisFmt = fmtAxis ?? ((v: number) => `${(v / 1000).toFixed(0)}k`);
 
   return (
     <ResponsiveContainer width="100%" height={260}>
@@ -109,13 +111,13 @@ export function ForecastChart({ data, locale, isAr }: ForecastChartProps) {
           tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+          tickFormatter={axisFmt}
           width={42}
           orientation={isAr ? "right" : "left"}
         />
 
         <ReTooltip
-          content={<ForecastTooltip locale={locale} isAr={isAr} />}
+          content={<ForecastTooltip fmt={fmt} isAr={isAr} />}
           cursor={{ stroke: "hsl(240 5.9% 90%)", strokeWidth: 1 }}
         />
 

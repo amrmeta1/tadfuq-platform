@@ -27,7 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ interface Policy {
   descAr: string;
   conditionEn: string;
   conditionAr: string;
+  conditionAmount?: number;
   actionEn: string;
   actionAr: string;
   category: Exclude<PolicyCategory, "all">;
@@ -61,8 +62,10 @@ interface TriggerEvent {
   policyAr: string;
   detailEn: string;
   detailAr: string;
+  detailAmount?: number;
   resultEn: string;
   resultAr: string;
+  resultAmount?: number;
 }
 
 // ── Mock Data ────────────────────────────────────────────────────────────────
@@ -75,8 +78,9 @@ const POLICIES: Policy[] = [
     nameAr: "الحد الأدنى للرصيد النقدي",
     descEn: "Protect against cash shortfalls by enforcing a minimum balance",
     descAr: "الحماية من نقص السيولة بفرض حد أدنى للرصيد",
-    conditionEn: "Balance < SAR 100,000",
-    conditionAr: "الرصيد < ١٠٠,٠٠٠ ريال",
+    conditionEn: "Balance < {0}",
+    conditionAr: "الرصيد < {0}",
+    conditionAmount: 100_000,
     actionEn: "Send critical alert + Block non-essential payments",
     actionAr: "إرسال تنبيه حرج + حظر المدفوعات غير الأساسية",
     category: "safety",
@@ -113,8 +117,9 @@ const POLICIES: Policy[] = [
     nameAr: "تحويل الفائض",
     descEn: "Optimize idle cash by suggesting high-yield deposits",
     descAr: "تحسين السيولة الراكدة باقتراح ودائع عالية العائد",
-    conditionEn: "Balance > SAR 500,000 for 3+ days",
-    conditionAr: "الرصيد > ٥٠٠,٠٠٠ ريال لمدة ٣+ أيام",
+    conditionEn: "Balance > {0} for 3+ days",
+    conditionAr: "الرصيد > {0} لمدة ٣+ أيام",
+    conditionAmount: 500_000,
     actionEn: "Suggest moving excess to high-yield deposit",
     actionAr: "اقتراح تحويل الفائض إلى وديعة عالية العائد",
     category: "optimization",
@@ -208,8 +213,9 @@ const POLICIES: Policy[] = [
     nameAr: "حد المدفوعات الكبيرة",
     descEn: "Require additional approval for high-value transactions",
     descAr: "طلب موافقة إضافية للمعاملات عالية القيمة",
-    conditionEn: "Single payment > SAR 100,000",
-    conditionAr: "دفعة واحدة > ١٠٠,٠٠٠ ريال",
+    conditionEn: "Single payment > {0}",
+    conditionAr: "دفعة واحدة > {0}",
+    conditionAmount: 100_000,
     actionEn: "Require additional approval",
     actionAr: "طلب موافقة إضافية",
     category: "safety",
@@ -238,8 +244,9 @@ const TRIGGER_TIMELINE: TriggerEvent[] = [
     timeAr: "قبل ٥ ساعات",
     policyEn: "Large Payment Threshold",
     policyAr: "حد المدفوعات الكبيرة",
-    detailEn: "Triggered for SAR 150,000 transfer",
-    detailAr: "تم التفعيل لتحويل ١٥٠,٠٠٠ ريال",
+    detailEn: "Triggered for {0} transfer",
+    detailAr: "تم التفعيل لتحويل {0}",
+    detailAmount: 150_000,
     resultEn: "Routed to approval",
     resultAr: "تم توجيهه للموافقة",
   },
@@ -250,8 +257,9 @@ const TRIGGER_TIMELINE: TriggerEvent[] = [
     policyAr: "تحويل الفائض",
     detailEn: "Surplus detected in main account",
     detailAr: "تم رصد فائض في الحساب الرئيسي",
-    resultEn: "Suggested SAR 200K to deposit",
-    resultAr: "اقتراح تحويل ٢٠٠ ألف ريال إلى وديعة",
+    resultEn: "Suggested {0} to deposit",
+    resultAr: "اقتراح تحويل {0} إلى وديعة",
+    resultAmount: 200_000,
   },
   {
     timeEn: "2d ago",
@@ -268,10 +276,12 @@ const TRIGGER_TIMELINE: TriggerEvent[] = [
     timeAr: "قبل ٣ أيام",
     policyEn: "Payroll Readiness",
     policyAr: "جاهزية الرواتب",
-    detailEn: "Payroll account underfunded by SAR 35K",
-    detailAr: "حساب الرواتب أقل بـ ٣٥ ألف ريال",
-    resultEn: "SAR 35K transferred from HQ",
-    resultAr: "تم تحويل ٣٥ ألف ريال من المقر الرئيسي",
+    detailEn: "Payroll account underfunded by {0}",
+    detailAr: "حساب الرواتب أقل بـ {0}",
+    detailAmount: 35_000,
+    resultEn: "{0} transferred from HQ",
+    resultAr: "تم تحويل {0} من المقر الرئيسي",
+    resultAmount: 35_000,
   },
   {
     timeEn: "5d ago",
@@ -317,7 +327,7 @@ function categoryLabelAr(cat: Exclude<PolicyCategory, "all">): string {
 
 export default function TreasuryPoliciesPage() {
   const { t, dir } = useI18n();
-  const { profile } = useCompany();
+  const { fmt } = useCurrency();
   const isAr = dir === "rtl";
 
   const [activeCategory, setActiveCategory] = useState<PolicyCategory>("all");
@@ -473,7 +483,9 @@ export default function TreasuryPoliciesPage() {
                       IF
                     </Badge>
                     <div className="flex-1 rounded-md bg-muted/60 px-3 py-2 text-sm font-mono">
-                      {isAr ? policy.conditionAr : policy.conditionEn}
+                      {policy.conditionAmount
+                        ? (isAr ? policy.conditionAr : policy.conditionEn).replace("{0}", fmt(policy.conditionAmount))
+                        : (isAr ? policy.conditionAr : policy.conditionEn)}
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
@@ -551,11 +563,15 @@ export default function TreasuryPoliciesPage() {
                       </Badge>
                     </div>
                     <p className="text-sm text-foreground">
-                      {isAr ? event.detailAr : event.detailEn}
+                      {event.detailAmount
+                        ? (isAr ? event.detailAr : event.detailEn).replace("{0}", fmt(event.detailAmount))
+                        : (isAr ? event.detailAr : event.detailEn)}
                     </p>
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <ArrowRight className="h-3 w-3" />
-                      {isAr ? event.resultAr : event.resultEn}
+                      {event.resultAmount
+                        ? (isAr ? event.resultAr : event.resultEn).replace("{0}", fmt(event.resultAmount))
+                        : (isAr ? event.resultAr : event.resultEn)}
                     </div>
                   </div>
                 </div>
@@ -593,7 +609,7 @@ export default function TreasuryPoliciesPage() {
                 </span>
               </div>
               <p className="text-3xl font-bold tabular-nums">
-                {isAr ? "٤٥,٠٠٠ ريال" : "SAR 45,000"}
+                {fmt(45_000)}
               </p>
               <p className="text-xs text-muted-foreground">
                 {isAr ? "من تحويل الفوائض" : "From surplus sweeps"}

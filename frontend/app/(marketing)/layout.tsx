@@ -13,13 +13,13 @@ export default function MarketingLayout({
   const isAr = locale === "ar";
 
   return (
-    <div dir={dir} className="min-h-screen flex flex-col" style={{ background: "hsl(220 55% 5%)" }}>
+    <div dir={dir} className="min-h-screen flex flex-col bg-zinc-950">
       <MarketingNavbar />
 
       <main className="flex-1">{children}</main>
 
       {/* Dark footer */}
-      <footer className="border-t border-white/10 py-12" style={{ background: "hsl(220 55% 4%)" }}>
+      <footer className="border-t border-white/10 py-12 bg-zinc-950">
         <div className="mx-auto max-w-6xl px-4 md:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div>

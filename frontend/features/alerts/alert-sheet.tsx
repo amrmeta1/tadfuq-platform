@@ -9,7 +9,8 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { SEVERITY_CONFIG, STATUS_CONFIG, relativeTime } from "./columns";
 import { useAlertAction } from "./hooks";
 import { AIDunningWorkflow } from "@/components/alerts/ai-dunning-workflow";
@@ -44,6 +45,7 @@ export function AlertSheet({
   dir,
 }: AlertSheetProps) {
   const { mutate: doAction, isPending } = useAlertAction(tenantId);
+  const { fmt } = useCurrency();
 
   const sheetSide = dir === "rtl" ? "left" : "right";
 
@@ -112,7 +114,7 @@ export function AlertSheet({
                       {isAr ? "المبلغ المرتبط" : "Related amount"}
                     </p>
                     <p className="text-lg font-semibold tabular-nums outflow">
-                      {formatCurrency(alert.related_amount, "SAR", locale)}
+                      {fmt(alert.related_amount)}
                     </p>
                   </section>
                 )}

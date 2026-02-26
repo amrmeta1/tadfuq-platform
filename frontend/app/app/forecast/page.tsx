@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import type { CashflowMonthPoint } from "@/components/forecast/MasterForecastChart";
 
 const MasterForecastChart = dynamic(
@@ -94,24 +95,13 @@ function getGridRows(isAr: boolean): GridRow[] {
   ];
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmtK(n: number | null, curr: string): string {
-  if (n == null) return "—";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}${abs.toLocaleString()}`;
-}
-
 // ── KPI Card ───────────────────────────────────────────────────────────────────
 
 function KpiCard({
-  value, label, dotColor, gradient, curr, icon: Icon,
+  value, label, dotColor, gradient, icon: Icon,
 }: {
   value: string; label: string; dotColor: string; gradient?: string;
-  curr: string; icon: React.ElementType;
+  icon: React.ElementType;
 }) {
   return (
     <Card className={`shadow-sm border-border/50 overflow-hidden ${gradient ?? ""}`}>
@@ -121,7 +111,7 @@ function KpiCard({
           <p className="text-[11px] text-muted-foreground font-medium leading-none">{label}</p>
         </div>
         <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground leading-none" suppressHydrationWarning>
-          +{value} <span className="text-sm font-semibold text-muted-foreground">{curr}</span>
+          {value}
         </p>
         <div className="mt-2 flex justify-end">
           <Icon className="h-4 w-4 text-muted-foreground/40" />
@@ -136,7 +126,8 @@ function KpiCard({
 export default function ForecastPage() {
   const { locale, dir } = useI18n();
   const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  void profile;
+  const { fmt, fmtAxis, selected: currCode } = useCurrency();
   const isAr = locale === "ar";
 
   const months = getMonths(isAr);
@@ -179,33 +170,29 @@ export default function ForecastPage() {
         {/* ── RIGHT PANE: KPI Sidebar ── */}
         <div className="w-full xl:w-[280px] shrink-0 flex flex-col gap-3">
           <KpiCard
-            value="3,088,421"
+            value={fmt(3_088_421)}
             label={isAr ? "الرصيد النقدي" : "Cash Balance"}
             dotColor="bg-blue-500"
             gradient="bg-gradient-to-br from-blue-50/70 to-transparent dark:from-blue-950/20"
-            curr={curr}
             icon={Wallet}
           />
           <KpiCard
-            value="820,000"
+            value={fmt(820_000)}
             label={isAr ? "تسويات" : "Adjustments"}
             dotColor="bg-violet-500"
-            curr={curr}
             icon={ArrowUpCircle}
           />
           <KpiCard
-            value="625,000"
+            value={fmt(625_000)}
             label={isAr ? "استثمارات" : "Investments"}
             dotColor="bg-teal-500"
-            curr={curr}
             icon={TrendingUp}
           />
           <KpiCard
-            value="1,497,600"
+            value={fmt(1_497_600)}
             label={isAr ? "الإجمالي" : "Total"}
             dotColor="bg-zinc-500"
             gradient="bg-muted/30"
-            curr={curr}
             icon={LayoutGrid}
           />
         </div>
@@ -245,7 +232,7 @@ export default function ForecastPage() {
                 </span>
               </div>
             </div>
-            <MasterForecastChart data={chartData} currency={curr} />
+            <MasterForecastChart data={chartData} fmt={fmt} fmtAxis={fmtAxis} currCode={currCode} />
           </div>
 
           {/* Synced Data Grid */}
@@ -311,7 +298,7 @@ export default function ForecastPage() {
                         }`}
                         suppressHydrationWarning
                       >
-                        {fmtK(val, curr)}
+                        {val == null ? "—" : fmt(val)}
                       </td>
                     ))}
                   </tr>

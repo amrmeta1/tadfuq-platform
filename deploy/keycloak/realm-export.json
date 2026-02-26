@@ -44,6 +44,38 @@
         {
           "name": "accountant_readonly",
           "description": "Accountant — read-only access to tenant data"
+        },
+        {
+          "name": "group_cfo",
+          "description": "Full access all entities"
+        },
+        {
+          "name": "treasury_director",
+          "description": "Treasury, FX, forecasts"
+        },
+        {
+          "name": "financial_controller",
+          "description": "Single entity scope (read)"
+        },
+        {
+          "name": "ap_manager",
+          "description": "Payables workflows only"
+        },
+        {
+          "name": "ar_manager",
+          "description": "Receivables workflows only"
+        },
+        {
+          "name": "bank_relationship_manager",
+          "description": "Bank accounts read only"
+        },
+        {
+          "name": "auditor_readonly",
+          "description": "Full read + audit log export"
+        },
+        {
+          "name": "board_member",
+          "description": "Executive summary only"
         }
       ]
     }
@@ -64,10 +96,14 @@
       "secret": "cashflow-api-secret",
       "redirectUris": [
         "http://localhost:3000/*",
+        "http://localhost:3000/api/auth/callback/keycloak",
+        "http://127.0.0.1:3000/*",
+        "http://127.0.0.1:3000/api/auth/callback/keycloak",
         "http://localhost:8080/*"
       ],
       "webOrigins": [
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
         "http://localhost:8080"
       ],
       "defaultClientScopes": [

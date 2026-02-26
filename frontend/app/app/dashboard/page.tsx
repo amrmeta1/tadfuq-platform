@@ -9,13 +9,10 @@ import {
   Download,
   Calendar,
   Building2,
-  Sparkles,
   Clock,
   ArrowUpRight,
   ArrowDownRight,
   Banknote,
-  MessageCircle,
-  ArrowLeftRight,
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
@@ -24,10 +21,7 @@ import {
   Boxes,
   BarChart3,
   AlertTriangle,
-  CheckCircle2,
-  CircleDot,
   Zap,
-  Target,
   Activity,
   Timer,
 } from "lucide-react";
@@ -59,7 +53,12 @@ import {
 } from "recharts";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { useEntity, entityBalanceInSAR, ENTITIES } from "@/contexts/EntityContext";
+import { Amt } from "@/components/ui/amt";
 import { exportToCSV, formatForExport } from "@/lib/export";
+import { DashboardRightSidebar } from "@/components/dashboard/DashboardRightSidebar";
+import { RechartsTooltipGlass } from "@/components/charts/ChartTooltipGlass";
 import { cn } from "@/lib/utils";
 
 const CashFlowChart = dynamic(
@@ -73,11 +72,25 @@ const BANK_ACCOUNTS = [
   { nameEn: "Masraf Al Rayan - Deposits", nameAr: "مصرف الريان - ودائع", balance: 38740, share: 0.17 },
 ];
 
-const TOTAL_BANK = 218340;
 const VISIBLE_ACCOUNTS = 2;
 const HEALTH_SCORE = 82;
 
-const FORECAST_7D = [
+/** Mock total bank balance (SAR) per entity for dashboard; consolidated = sum of all */
+function getTotalBankForEntity(selectedId: string | "consolidated"): number {
+  if (selectedId === "consolidated") {
+    return ENTITIES.reduce((s, e) => s + entityBalanceInSAR(e), 0);
+  }
+  const byId: Record<string, number> = {
+    hq: 218_340,
+    riyadh: 320_000,
+    jeddah: 245_000,
+    dubai: 412_000 / 1.0222,
+    doha: 189_000 / 1.0312,
+  };
+  return byId[selectedId] ?? 218_340;
+}
+
+const FORECAST_7D_BASE = [
   { day: "Mon", dayAr: "اثنين", balance: 218340 },
   { day: "Tue", dayAr: "ثلاثاء", balance: 241340 },
   { day: "Wed", dayAr: "أربعاء", balance: 238140 },
@@ -127,7 +140,6 @@ interface SectionVisibility {
   kpi: boolean;
   chart: boolean;
   banks: boolean;
-  agents: boolean;
   forecast: boolean;
   activity: boolean;
   upcoming: boolean;
@@ -135,7 +147,7 @@ interface SectionVisibility {
 }
 
 const DEFAULT_VISIBILITY: SectionVisibility = {
-  kpi: true, chart: true, banks: true, agents: true,
+  kpi: true, chart: true, banks: true,
   forecast: true, activity: true, upcoming: true, performance: true,
 };
 
@@ -148,25 +160,89 @@ function loadVisibility(): SectionVisibility {
   return DEFAULT_VISIBILITY;
 }
 
-function ForecastTooltip({ active, payload, label, currency }: any) {
+function ForecastTooltip({ active, payload, label, fmt, forecastData, isAr }: any) {
   if (!active || !payload?.length) return null;
+  const value = Number(payload[0]?.value);
+  const idx = forecastData?.findIndex((d: any) => d.day === label) ?? -1;
+  const prevBalance = idx > 0 && forecastData?.[idx - 1] ? Number(forecastData[idx - 1].balance) : undefined;
+  const pctChange =
+    prevBalance != null && prevBalance !== 0
+      ? ((value - prevBalance) / prevBalance) * 100
+      : undefined;
+  const labelFormatted = isAr ? `${label} · 2026` : `${label} · 2026`;
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs min-w-[120px]">
-      <p className="font-semibold mb-0.5">{label}</p>
-      <p className="tabular-nums font-medium text-indigo-600 dark:text-indigo-400">
-        {currency} {Number(payload[0]?.value).toLocaleString()}
-      </p>
-    </div>
+    <RechartsTooltipGlass
+      active={active}
+      payload={[{ name: isAr ? "الرصيد" : "Balance", value, color: "hsl(239 84% 67%)", dataKey: "balance" }]}
+      label={labelFormatted}
+      fmt={fmt}
+      pctChange={pctChange}
+      mainValue={value}
+      isPremium
+    />
   );
+}
+
+const BASE_TOTAL = 218340;
+
+function toDateOnly(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function parseDateOnly(s: string): Date {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+}
+
+/** Default dashboard date range: 6 months ago to today */
+function defaultDateRange(): { from: Date; to: Date } {
+  const to = new Date();
+  const from = new Date(to.getFullYear(), to.getMonth() - 5, 1);
+  return { from, to };
+}
+
+/** Mock KPIs for a given date range and entity (prorate from base values) */
+function getMockKpisForRange(
+  dateRange: { from: Date; to: Date },
+  entityTotalBalance: number
+): { balance: number; revenue: number; expenses: number; runwayMonths: number } {
+  const months = Math.max(1, (dateRange.to.getFullYear() - dateRange.from.getFullYear()) * 12 + (dateRange.to.getMonth() - dateRange.from.getMonth()) + 1);
+  const scale = months / 6;
+  return {
+    balance: entityTotalBalance,
+    revenue: Math.round(112000 * scale),
+    expenses: Math.round(79000 * scale),
+    runwayMonths: 8.3,
+  };
 }
 
 export default function DashboardPage() {
   const { locale, dir, t } = useI18n();
   const d = t.dashboard;
   const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  const { fmt, fmtDual, fmtAxis, selected: currCode } = useCurrency();
+  const { selectedId } = useEntity();
+  const curr = currCode;
   const companyName = profile.companyName || (locale === "ar" ? "شركتك" : "your company");
   const isAr = locale === "ar";
+
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>(() => defaultDateRange());
+  const [dateFromInput, setDateFromInput] = useState(() => toDateOnly(defaultDateRange().from));
+  const [dateToInput, setDateToInput] = useState(() => toDateOnly(defaultDateRange().to));
+
+  const applyDateFilter = () => {
+    const from = parseDateOnly(dateFromInput);
+    const to = parseDateOnly(dateToInput);
+    if (from <= to) setDateRange({ from, to });
+  };
+
+  const TOTAL_BANK = getTotalBankForEntity(selectedId);
+  const mockKpis = getMockKpisForRange(dateRange, TOTAL_BANK);
+  const forecastScale = TOTAL_BANK / BASE_TOTAL;
+  const FORECAST_7D = FORECAST_7D_BASE.map((row) => ({
+    ...row,
+    balance: Math.round(row.balance * forecastScale),
+  }));
 
   const [showAllAccounts, setShowAllAccounts] = useState(false);
   const visibleAccounts = showAllAccounts ? BANK_ACCOUNTS : BANK_ACCOUNTS.slice(0, VISIBLE_ACCOUNTS);
@@ -198,7 +274,9 @@ export default function DashboardPage() {
   const forecastChange = forecastEnd - TOTAL_BANK;
 
   return (
-    <div dir={dir} className="flex flex-col gap-5 p-5 md:p-6 overflow-y-auto h-full">
+    <div dir={dir} className="flex flex-col xl:flex-row gap-5 p-5 md:p-6 overflow-y-auto h-full">
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex flex-col gap-5">
 
       {/* ═══ WELCOME BANNER ═══ */}
       <div className="rounded-2xl bg-gradient-to-br from-indigo-50 via-white to-emerald-50/50 dark:from-indigo-950/20 dark:via-background dark:to-emerald-950/10 border border-border/50 p-5 md:p-6">
@@ -250,7 +328,6 @@ export default function DashboardPage() {
                     { key: "activity" as const, label: d.sectionActivity },
                     { key: "upcoming" as const, label: d.sectionUpcoming },
                     { key: "performance" as const, label: d.sectionPerformance },
-                    { key: "agents" as const, label: d.sectionAgents },
                   ]).map((item) => (
                     <label key={item.key} className="flex items-center justify-between cursor-pointer">
                       <span className="text-sm font-medium">{item.label}</span>
@@ -288,6 +365,43 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* ═══ Unified date + entity filter ═══ */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/50 bg-muted/30 dark:bg-muted/10 px-4 py-3">
+        <span className="text-xs font-medium text-muted-foreground">{d.filterByDate}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground whitespace-nowrap">{d.dateFrom}</span>
+            <input
+              type="date"
+              value={dateFromInput}
+              onChange={(e) => setDateFromInput(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground whitespace-nowrap">{d.dateTo}</span>
+            <input
+              type="date"
+              value={dateToInput}
+              onChange={(e) => setDateToInput(e.target.value)}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </label>
+          <Button type="button" size="sm" variant="default" className="h-8 text-xs" onClick={applyDateFilter}>
+            {d.apply}
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground border-s border-border ps-3 ms-1">
+          <Building2 className="h-3.5 w-3.5" />
+          <span>{d.entity}:</span>
+          <span className="font-medium text-foreground">
+            {selectedId === "consolidated"
+              ? (isAr ? "الموحّد" : "Consolidated")
+              : (isAr ? ENTITIES.find((e) => e.id === selectedId)?.nameAr : ENTITIES.find((e) => e.id === selectedId)?.nameEn) ?? selectedId}
+          </span>
+        </div>
+      </div>
+
       {/* ═══ KPI STRIP (horizontal) ═══ */}
       {sections.kpi && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -299,7 +413,7 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">{d.totalBalance}</p>
               </div>
               <p suppressHydrationWarning className="text-xl font-bold tabular-nums tracking-tight leading-none">
-                {curr} {TOTAL_BANK.toLocaleString()}
+                {fmt(mockKpis.balance)}
               </p>
               <p className="text-xs text-muted-foreground mt-1.5">{d.across3Accounts}</p>
               <div className="text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
@@ -316,7 +430,7 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">{d.totalRevenue}</p>
               </div>
               <p suppressHydrationWarning className="text-xl font-bold tabular-nums tracking-tight leading-none">
-                {curr} 112,000
+                {curr} {mockKpis.revenue.toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground mt-1.5">{d.thisMonth}</p>
               <div className="text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
@@ -333,7 +447,7 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">{d.totalExpenses}</p>
               </div>
               <p suppressHydrationWarning className="text-xl font-bold tabular-nums tracking-tight leading-none">
-                {curr} 79,000
+                {curr} {mockKpis.expenses.toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground mt-1.5">{d.topBurn}</p>
               <div className="text-rose-500 bg-rose-500/10 px-2 py-0.5 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
@@ -350,7 +464,7 @@ export default function DashboardPage() {
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide leading-none">{d.runway}</p>
               </div>
               <p className="text-xl font-bold tabular-nums tracking-tight leading-none">
-                8.3 {d.runwayMonths}
+                {mockKpis.runwayMonths} {d.runwayMonths}
               </p>
               <p className="text-xs text-muted-foreground mt-1.5">{d.basedOnBurnRate}</p>
               <div className="text-indigo-500 bg-indigo-500/10 px-2 py-0.5 rounded-md text-xs font-medium w-fit mt-2 flex items-center gap-1">
@@ -362,15 +476,12 @@ export default function DashboardPage() {
       )}
 
       {/* ═══ MAIN CHART + 7-DAY FORECAST ═══ */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
-        {/* Cash Flow Chart */}
+      <div className="grid grid-cols-1 gap-5">
         {sections.chart && (
           <Card className="shadow-sm border-border/50 p-1">
-            <CashFlowChart currency={curr} />
+            <CashFlowChart currency={curr} dateRange={dateRange} />
           </Card>
         )}
-
-        {/* 7-Day Forecast mini chart */}
         {sections.forecast && (
           <Card className="shadow-sm border-border/50">
             <CardHeader className="pb-2 pt-5 px-5">
@@ -391,11 +502,34 @@ export default function DashboardPage() {
                         <stop offset="5%" stopColor="hsl(239 84% 67%)" stopOpacity={0.3} />
                         <stop offset="95%" stopColor="hsl(239 84% 67%)" stopOpacity={0.02} />
                       </linearGradient>
+                      <filter id="forecastGlow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur" />
+                        <feMerge>
+                          <feMergeNode in="blur" />
+                          <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                      </filter>
                     </defs>
                     <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }} axisLine={false} tickLine={false} />
                     <YAxis hide domain={["dataMin - 10000", "dataMax + 10000"]} />
-                    <Tooltip content={<ForecastTooltip currency={curr} />} />
-                    <Area type="monotone" dataKey="balance" stroke="hsl(239 84% 67%)" strokeWidth={2} fill="url(#forecastGrad)" dot={{ r: 3, fill: "var(--background)", stroke: "hsl(239 84% 67%)", strokeWidth: 2 }} />
+                    <Tooltip content={<ForecastTooltip fmt={fmt} forecastData={forecastData} isAr={isAr} />} cursor={{ fill: "hsl(142 71% 45% / 0.12)", radius: 8 }} />
+                    <Area
+                      type="monotone"
+                      dataKey="balance"
+                      stroke="hsl(239 84% 67%)"
+                      strokeWidth={2}
+                      fill="url(#forecastGrad)"
+                      dot={{ r: 3, fill: "var(--background)", stroke: "hsl(239 84% 67%)", strokeWidth: 2 }}
+                      activeDot={(props: any) => {
+                        const { cx, cy } = props;
+                        return (
+                          <g>
+                            <circle cx={cx} cy={cy} r={9} fill="hsl(239 84% 67%)" opacity={0.4} filter="url(#forecastGlow)" />
+                            <circle cx={cx} cy={cy} r={6} fill="hsl(239 84% 67%)" stroke="var(--background)" strokeWidth={2} />
+                          </g>
+                        );
+                      }}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -564,96 +698,52 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ═══ BOTTOM ROW: Recent Activity + AI Agents ═══ */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-
-        {/* Recent Activity */}
-        {sections.activity && (
-          <Card className="shadow-sm border-border/50">
-            <CardHeader className="pb-2 pt-5 px-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-muted-foreground" />
-                  <CardTitle className="text-sm font-semibold">{d.recentActivity}</CardTitle>
-                </div>
-                <Link href="/app/transactions" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-                  {t.nav.transactions} →
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent className="px-5 pb-5">
-              <div className="space-y-1">
-                {RECENT_TX.map((tx) => (
-                  <div key={tx.id} className="flex items-center gap-3 py-2.5 border-b border-border/30 last:border-b-0">
-                    <div className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                      tx.type === "inflow" ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-rose-100 dark:bg-rose-900/40"
-                    )}>
-                      {tx.type === "inflow"
-                        ? <ArrowDownRight className="h-4 w-4 text-emerald-600" />
-                        : <ArrowUpRight className="h-4 w-4 text-rose-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{isAr ? tx.descAr : tx.descEn}</p>
-                      <p className="text-[10px] text-muted-foreground">{isAr ? tx.timeAr : tx.time}</p>
-                    </div>
-                    <span className={cn(
-                      "text-sm font-semibold tabular-nums shrink-0",
-                      tx.type === "inflow" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
-                    )}>
-                      {tx.type === "inflow" ? "+" : "-"}{curr} {tx.amount.toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* AI Agents */}
-        {sections.agents && (
-          <Card className="bg-card border-indigo-100 dark:border-indigo-900/50 shadow-sm relative overflow-hidden">
-            <CardHeader className="pb-2 pt-5 px-5">
+      {/* ═══ BOTTOM ROW: Recent Activity (AI Agents moved to right sidebar) ═══ */}
+      {sections.activity && (
+        <Card className="shadow-sm border-border/50">
+          <CardHeader className="pb-2 pt-5 px-5">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-sm font-semibold">{d.aiAgents}</CardTitle>
+                <Zap className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-semibold">{d.recentActivity}</CardTitle>
               </div>
-            </CardHeader>
-            <CardContent className="px-5 pb-5 space-y-3">
-              <div className="rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">👁️</span>
-                  <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">{d.monitoringAgent}</p>
+              <Link href="/app/transactions" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
+                {t.nav.transactions} →
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5">
+            <div className="space-y-1">
+              {RECENT_TX.map((tx) => (
+                <div key={tx.id} className="flex items-center gap-3 py-2.5 border-b border-border/30 last:border-b-0">
+                  <div className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                    tx.type === "inflow" ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-rose-100 dark:bg-rose-900/40"
+                  )}>
+                    {tx.type === "inflow"
+                      ? <ArrowDownRight className="h-4 w-4 text-emerald-600" />
+                      : <ArrowUpRight className="h-4 w-4 text-rose-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{isAr ? tx.descAr : tx.descEn}</p>
+                    <p className="text-[10px] text-muted-foreground">{isAr ? tx.timeAr : tx.time}</p>
+                  </div>
+                  <span className={cn(
+                    "text-sm font-semibold tabular-nums shrink-0",
+                    tx.type === "inflow" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"
+                  )}>
+                    {tx.type === "inflow" ? "+" : "-"}{curr} {tx.amount.toLocaleString()}
+                  </span>
                 </div>
-                <p className="text-sm text-foreground leading-snug">{d.monitoringMsg}</p>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400">
-                  <MessageCircle className="h-3 w-3" />{d.sendWhatsapp}
-                </Button>
-              </div>
-              <div className="rounded-lg border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-950/20 px-4 py-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🔮</span>
-                  <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-400">{d.forecastingAgent}</p>
-                </div>
-                <p className="text-sm text-foreground leading-snug">{d.forecastingMsg}</p>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400">
-                  <TrendingDown className="h-3 w-3" />{d.viewForecast}
-                </Button>
-              </div>
-              <div className="rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 px-4 py-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🧠</span>
-                  <p className="text-xs font-semibold text-rose-700 dark:text-rose-400">{d.decisionAgent}</p>
-                </div>
-                <p className="text-sm text-foreground leading-snug">{d.decisionMsg}</p>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400">
-                  <ArrowLeftRight className="h-3 w-3" />{d.postponeInvoice}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       </div>
+      {/* Right sidebar — AI Agents, Liquidity Summary, Quick Links */}
+      <DashboardRightSidebar />
     </div>
   );
 }

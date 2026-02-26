@@ -5,23 +5,17 @@ import { MessageCircle, TrendingUp, Clock, BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/context";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { AgingBoard } from "@/components/cash-collect/AgingBoard";
 import { WhatsAppDialog } from "@/components/cash-collect/WhatsAppDialog";
 import { RECEIVABLES, type Receivable } from "@/components/cash-collect/types";
-
-// ── KPI data ──────────────────────────────────────────────────────────────────
-
-function fmtSAR(n: number): string {
-  if (n >= 1_000_000) return `SAR ${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `SAR ${(n / 1_000).toFixed(0)}k`;
-  return `SAR ${n.toLocaleString("en-US")}`;
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CashCollectPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
+  const { fmt } = useCurrency();
 
   const [selected, setSelected] = useState<Receivable | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -40,14 +34,14 @@ export default function CashCollectPage() {
   const kpis = [
     {
       label: { en: "Total Receivables", ar: "إجمالي المستحقات" },
-      value: fmtSAR(totalReceivables),
+      value: fmt(totalReceivables),
       sub: { en: "Across all clients", ar: "عبر جميع العملاء" },
       icon: BarChart2,
       valueClass: "text-foreground",
     },
     {
       label: { en: "Severely Overdue >30d", ar: "متأخرة بشدة +٣٠ يوم" },
-      value: fmtSAR(severelyOverdue),
+      value: fmt(severelyOverdue),
       sub: { en: "Requires immediate action", ar: "يتطلب إجراءً فورياً" },
       icon: Clock,
       valueClass: "text-destructive",
@@ -92,7 +86,7 @@ export default function CashCollectPage() {
               <>
                 <span className="font-semibold text-emerald-950 dark:text-emerald-100">تنبيه مستشار AI:</span>{" "}
                 ٣ فواتير تتجاوز{" "}
-                <span className="font-bold">SAR 340,000</span>{" "}
+                <span className="font-bold">{fmt(340_000)}</span>{" "}
                 متأخرة بشكل حاد. تم إعداد{" "}
                 <span className="font-bold">٣ رسائل واتساب ذكية</span>{" "}
                 جاهزة للإرسال الفوري.
@@ -101,7 +95,7 @@ export default function CashCollectPage() {
               <>
                 <span className="font-semibold text-emerald-950 dark:text-emerald-100">Mustashar AI Insight:</span>{" "}
                 3 invoices exceeding{" "}
-                <span className="font-bold">SAR 340,000</span>{" "}
+                <span className="font-bold">{fmt(340_000)}</span>{" "}
                 are severely overdue. Auto-drafted{" "}
                 <span className="font-bold">3 context-aware WhatsApp messages</span>{" "}
                 ready for dispatch.
@@ -149,7 +143,7 @@ export default function CashCollectPage() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
             {isAr ? "لوحة تقادم الذمم المدينة" : "AR Aging Board"}
           </h2>
-          <AgingBoard isAr={isAr} onGenerate={handleGenerate} />
+          <AgingBoard isAr={isAr} onGenerate={handleGenerate} fmt={fmt} />
         </div>
 
       </div>
@@ -160,6 +154,7 @@ export default function CashCollectPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         isAr={isAr}
+        fmt={fmt}
       />
     </div>
   );

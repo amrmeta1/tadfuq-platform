@@ -1,53 +1,110 @@
 "use client";
 
 import {
-  AreaChart,
+  ComposedChart,
   Area,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  Legend,
 } from "recharts";
-import { Boxes } from "lucide-react";
+import { motion } from "framer-motion";
+import { Boxes, Sparkles } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { useScenarioPlanner } from "@/lib/hooks/useScenarioPlanner";
 import { useForecastSimulation } from "@/features/forecast/use-forecast-simulation";
 import { ForecastChart } from "@/features/forecast/forecast-chart";
 import { ScenarioSandbox } from "@/features/forecast/scenario-sandbox";
+import type { ScenarioAssumptions, ScenarioDerived } from "@/lib/hooks/useScenarioPlanner";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Quick scenario definitions (Base 0%, Optimistic +20%, Pessimistic -30%) ───
 
-function fmtSAR(n: number): string {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}SAR ${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}SAR ${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}SAR ${abs.toLocaleString("en-US")}`;
-}
+const QUICK_BASE = { revenueGrowthPct: 0, costReductionPct: 0, collectionSpeedDays: 30 } as ScenarioAssumptions;
+const QUICK_OPTIMISTIC = { revenueGrowthPct: 20, costReductionPct: 10, collectionSpeedDays: 25 } as ScenarioAssumptions;
+const QUICK_PESSIMISTIC = { revenueGrowthPct: -30, costReductionPct: 0, collectionSpeedDays: 45 } as ScenarioAssumptions;
 
-function fmtSARAxis(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return String(n);
-}
-
-// ── Custom tooltip ────────────────────────────────────────────────────────────
-
-function ChartTooltipContent({ active, payload, label }: any) {
-  if (!active || !payload?.length) return null;
-  const val: number = payload[0]?.value ?? 0;
+function isQuickMatch(assumptions: ScenarioAssumptions, target: ScenarioAssumptions) {
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs min-w-[140px]">
-      <p className="font-semibold text-foreground mb-1">{label}</p>
-      <p className={cn("tabular-nums font-mono font-medium", val >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
-        {fmtSAR(val)}
-      </p>
+    assumptions.revenueGrowthPct === target.revenueGrowthPct &&
+    assumptions.costReductionPct === target.costReductionPct &&
+    assumptions.collectionSpeedDays === target.collectionSpeedDays
+  );
+}
+
+// ── Mustashar recommendation text (mock, dynamic by scenario) ─────────────────
+
+function getMustasharRecommendation(
+  assumptions: ScenarioAssumptions,
+  derived: ScenarioDerived,
+  fmt: (n: number) => string,
+  isAr: boolean
+): string {
+  const { revenueGrowthPct, costReductionPct, collectionSpeedDays } = assumptions;
+  const { netMonthlyFlow } = derived;
+
+  if (revenueGrowthPct >= 20 && costReductionPct >= 10) {
+    return isAr
+      ? "في هذا السيناريو، الأداء قوي. نوصي بالاستمرار في خطة النمو والحفاظ على ضبط التكاليف لتعظيم الرصيد النقدي."
+      : "In this scenario, performance is strong. We recommend continuing the growth plan and maintaining cost discipline to maximize cash position.";
+  }
+  if (revenueGrowthPct <= -25) {
+    const exampleImpact = 245_000;
+    return isAr
+      ? `في هذا السيناريو، نوصي بتأجيل دفعات الموردين 15 يوم لتحسين السيولة بـ ${fmt(exampleImpact)}.`
+      : `In this scenario, we recommend delaying supplier payments by 15 days to improve liquidity by ${fmt(exampleImpact)}.`;
+  }
+  if (collectionSpeedDays >= 45) {
+    return isAr
+      ? "تأخر التحصيل يزيد مخاطر السيولة. نوصي بتفعيل التحصيل المبكر للفواتير الكبرى وإرسال تذكيرات تلقائية للعملاء المتأخرين."
+      : "Delayed collections increase liquidity risk. We recommend early collection for large invoices and automated reminders for overdue customers.";
+  }
+  if (costReductionPct >= 20) {
+    return isAr
+      ? "تخفيض التكاليف الحالي يعزز المدرج الزمني. نوصي بمراقبة الجودة التشغيلية والحفاظ على مستوى الخدمة لتجنب فقدان الإيرادات."
+      : "Current cost reduction strengthens runway. We recommend monitoring operational quality and service levels to avoid revenue loss.";
+  }
+  return isAr
+    ? "بناءً على الافتراضات الحالية، نوصي بمراقبة الرصيد النقدي والتفاوض مع الموردين على آجال إضافية عند الحاجة."
+    : "Based on current assumptions, we recommend monitoring cash balance and negotiating extended terms with suppliers when needed.";
+}
+
+// ── Chart tooltip (Base + Scenario) ────────────────────────────────────────────
+
+function ChartTooltipContent({ active, payload, label, isAr }: any) {
+  const { fmt } = useCurrency();
+  if (!active || !payload?.length) return null;
+  const baseVal = payload.find((p: any) => p.dataKey === "baseBalance")?.value ?? 0;
+  const scenarioVal = payload.find((p: any) => p.dataKey === "cashBalance")?.value ?? 0;
+  const diff = scenarioVal - baseVal;
+  return (
+    <div className="rounded-lg border bg-popover px-3 py-2.5 shadow-md text-xs min-w-[180px] space-y-1.5">
+      <p className="font-semibold text-foreground mb-1.5">{label}</p>
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">{isAr ? "الأساس" : "Base"}</span>
+        <span className="tabular-nums font-medium">{fmt(baseVal)}</span>
+      </div>
+      <div className="flex justify-between gap-4">
+        <span className="text-muted-foreground">{isAr ? "السيناريو" : "Scenario"}</span>
+        <span className={cn("tabular-nums font-medium", scenarioVal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+          {fmt(scenarioVal)}
+        </span>
+      </div>
+      <div className="flex justify-between gap-4 pt-1 border-t border-border">
+        <span className="text-muted-foreground">{isAr ? "التأثير" : "Impact"}</span>
+        <span className={cn("tabular-nums font-semibold", diff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+          {diff >= 0 ? "+" : ""}{fmt(diff)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -56,6 +113,7 @@ function ChartTooltipContent({ active, payload, label }: any) {
 
 export default function ScenarioPlannerPage() {
   const { locale, dir } = useI18n();
+  const { fmt, fmtAxis, selected: currCode } = useCurrency();
   const isAr = locale === "ar";
 
   const { baseline, simulated, params, setParam, reset, cashZeroDate } =
@@ -75,6 +133,20 @@ export default function ScenarioPlannerPage() {
   const { adjustedRevenue, adjustedBurn, netMonthlyFlow, projectedRunwayMonths, chartData } = derived;
   const isProfitable = projectedRunwayMonths === null;
   const isPositiveFlow = netMonthlyFlow >= 0;
+
+  const applyQuickScenario = (a: ScenarioAssumptions) => {
+    setAssumption("revenueGrowthPct", a.revenueGrowthPct);
+    setAssumption("costReductionPct", a.costReductionPct);
+    setAssumption("collectionSpeedDays", a.collectionSpeedDays);
+  };
+
+  const baseNetFlow = baselineRevenue - baselineBurn;
+  const chartDataWithBase = chartData.map((d, i) => ({
+    ...d,
+    baseBalance: Math.round(currentCashBalance + baseNetFlow * (i + 1)),
+  }));
+
+  const collectionDelayPct = Math.round(((assumptions.collectionSpeedDays - 15) / 45) * 100);
 
   // Runway color
   const runwayColor =
@@ -100,7 +172,44 @@ export default function ScenarioPlannerPage() {
           </p>
         </div>
 
-        {/* ── Scenario preset bar ── */}
+        {/* ── Quick scenario buttons (Base / Optimistic / Pessimistic) ── */}
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant={isQuickMatch(assumptions, QUICK_BASE) ? "default" : "outline"}
+            size="default"
+            className={cn(
+              "gap-2 font-semibold",
+              isQuickMatch(assumptions, QUICK_BASE) && "bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+            )}
+            onClick={() => applyQuickScenario(QUICK_BASE)}
+          >
+            {isAr ? "الحالة الأساسية (٠٪)" : "Base Case (0%)"}
+          </Button>
+          <Button
+            variant={isQuickMatch(assumptions, QUICK_OPTIMISTIC) ? "default" : "outline"}
+            size="default"
+            className={cn(
+              "gap-2 font-semibold",
+              isQuickMatch(assumptions, QUICK_OPTIMISTIC) && "bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+            )}
+            onClick={() => applyQuickScenario(QUICK_OPTIMISTIC)}
+          >
+            {isAr ? "متفائل (+٢٠٪)" : "Optimistic (+20%)"}
+          </Button>
+          <Button
+            variant={isQuickMatch(assumptions, QUICK_PESSIMISTIC) ? "default" : "outline"}
+            size="default"
+            className={cn(
+              "gap-2 font-semibold",
+              isQuickMatch(assumptions, QUICK_PESSIMISTIC) && "bg-rose-600 hover:bg-rose-700 text-white border-0"
+            )}
+            onClick={() => applyQuickScenario(QUICK_PESSIMISTIC)}
+          >
+            {isAr ? "متشائم (-٣٠٪)" : "Pessimistic (-30%)"}
+          </Button>
+        </div>
+
+        {/* ── More scenario presets ── */}
         <div className="flex flex-wrap gap-2">
           {presets.map((preset) => (
             <Button
@@ -148,14 +257,20 @@ export default function ScenarioPlannerPage() {
                   <label className="text-sm font-medium">
                     {isAr ? "معدل نمو الإيرادات" : "Revenue Growth Rate"}
                   </label>
-                  <span className={cn(
-                    "text-sm font-bold tabular-nums",
-                    assumptions.revenueGrowthPct > 0 ? "text-emerald-600 dark:text-emerald-400"
-                    : assumptions.revenueGrowthPct < 0 ? "text-destructive"
-                    : "text-foreground"
-                  )}>
+                  <motion.span
+                    key={assumptions.revenueGrowthPct}
+                    initial={{ opacity: 0.7, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.15 }}
+                    className={cn(
+                      "text-base font-bold tabular-nums min-w-[3rem] text-right",
+                      assumptions.revenueGrowthPct > 0 ? "text-emerald-600 dark:text-emerald-400"
+                      : assumptions.revenueGrowthPct < 0 ? "text-destructive"
+                      : "text-foreground"
+                    )}
+                  >
                     {assumptions.revenueGrowthPct > 0 ? "+" : ""}{assumptions.revenueGrowthPct}%
-                  </span>
+                  </motion.span>
                 </div>
                 <Slider
                   min={-20}
@@ -163,6 +278,7 @@ export default function ScenarioPlannerPage() {
                   step={1}
                   value={[assumptions.revenueGrowthPct]}
                   onValueChange={([v]) => setAssumption("revenueGrowthPct", v)}
+                  className="py-1"
                 />
                 <p className="text-xs text-muted-foreground">
                   {isAr ? "التأثير على الإيرادات الشهرية المعدلة" : "Impact on adjusted monthly revenue"}
@@ -175,12 +291,18 @@ export default function ScenarioPlannerPage() {
                   <label className="text-sm font-medium">
                     {isAr ? "تخفيض التكاليف" : "Cost Reduction"}
                   </label>
-                  <span className={cn(
-                    "text-sm font-bold tabular-nums",
-                    assumptions.costReductionPct > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"
-                  )}>
+                  <motion.span
+                    key={assumptions.costReductionPct}
+                    initial={{ opacity: 0.7, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.15 }}
+                    className={cn(
+                      "text-base font-bold tabular-nums min-w-[3rem] text-right",
+                      assumptions.costReductionPct > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"
+                    )}
+                  >
                     -{assumptions.costReductionPct}%
-                  </span>
+                  </motion.span>
                 </div>
                 <Slider
                   min={0}
@@ -188,26 +310,38 @@ export default function ScenarioPlannerPage() {
                   step={1}
                   value={[assumptions.costReductionPct]}
                   onValueChange={([v]) => setAssumption("costReductionPct", v)}
+                  className="py-1"
                 />
                 <p className="text-xs text-muted-foreground">
                   {isAr ? "تخفيض معدل الحرق الشهري" : "Reduction in monthly burn rate"}
                 </p>
               </div>
 
-              {/* Slider 3 — Collection Speed */}
+              {/* Slider 3 — Collection Speed (with delay %) */}
               <div className="space-y-3">
                 <div className="flex items-baseline justify-between">
                   <label className="text-sm font-medium">
                     {isAr ? "سرعة التحصيل" : "Collection Speed"}
                   </label>
-                  <span className={cn(
-                    "text-sm font-bold tabular-nums",
-                    assumptions.collectionSpeedDays < 30 ? "text-emerald-600 dark:text-emerald-400"
-                    : assumptions.collectionSpeedDays > 30 ? "text-amber-600 dark:text-amber-400"
-                    : "text-foreground"
-                  )}>
+                  <motion.span
+                    key={assumptions.collectionSpeedDays}
+                    initial={{ opacity: 0.7, scale: 1.05 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.15 }}
+                    className={cn(
+                      "text-base font-bold tabular-nums min-w-[4rem] text-right",
+                      assumptions.collectionSpeedDays < 30 ? "text-emerald-600 dark:text-emerald-400"
+                      : assumptions.collectionSpeedDays > 30 ? "text-amber-600 dark:text-amber-400"
+                      : "text-foreground"
+                    )}
+                  >
                     {assumptions.collectionSpeedDays} {isAr ? "يوم" : "days"}
-                  </span>
+                    {collectionDelayPct > 0 && (
+                      <span className="text-muted-foreground font-normal ml-1">
+                        ({isAr ? "تأخير" : "delay"} {collectionDelayPct}%)
+                      </span>
+                    )}
+                  </motion.span>
                 </div>
                 <Slider
                   min={15}
@@ -215,6 +349,7 @@ export default function ScenarioPlannerPage() {
                   step={1}
                   value={[assumptions.collectionSpeedDays]}
                   onValueChange={([v]) => setAssumption("collectionSpeedDays", v)}
+                  className="py-1"
                 />
                 <p className="text-xs text-muted-foreground">
                   {isAr ? "متوسط أيام تحصيل المستحقات" : "Average days to collect receivables"}
@@ -244,10 +379,10 @@ export default function ScenarioPlannerPage() {
                   : adjustedRevenue < baselineRevenue ? "text-destructive"
                   : "text-foreground"
                 )}>
-                  {fmtSAR(adjustedRevenue)}
+                  {fmt(adjustedRevenue)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {isAr ? "الأساس:" : "Baseline:"} {fmtSAR(baselineRevenue)}
+                  {isAr ? "الأساس:" : "Baseline:"} {fmt(baselineRevenue)}
                 </p>
               </CardContent>
             </Card>
@@ -269,10 +404,10 @@ export default function ScenarioPlannerPage() {
                   : adjustedBurn > baselineBurn ? "text-destructive"
                   : "text-foreground"
                 )}>
-                  {fmtSAR(adjustedBurn)}
+                  {fmt(adjustedBurn)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {isAr ? "الأساس:" : "Baseline:"} {fmtSAR(baselineBurn)}
+                  {isAr ? "الأساس:" : "Baseline:"} {fmt(baselineBurn)}
                 </p>
               </CardContent>
             </Card>
@@ -292,7 +427,7 @@ export default function ScenarioPlannerPage() {
                   "text-xl font-bold tabular-nums tracking-tighter",
                   isPositiveFlow ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                 )}>
-                  {netMonthlyFlow >= 0 ? "+" : ""}{fmtSAR(netMonthlyFlow)}
+                  {netMonthlyFlow >= 0 ? "+" : ""}{fmt(netMonthlyFlow)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isAr ? "شهرياً" : "per month"}
@@ -329,82 +464,147 @@ export default function ScenarioPlannerPage() {
           </div>
         </div>
 
-        {/* ── Live Area Chart ── */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">
-              {isAr ? "توقعات الرصيد النقدي (١٢ شهراً)" : "Projected Cash Balance (12 Months)"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="greenGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(142 71% 45%)" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="hsl(142 71% 45%)" stopOpacity={0.02} />
-                    </linearGradient>
-                    <linearGradient id="redGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(0 72% 51%)" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="hsl(0 72% 51%)" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(240 5.9% 90% / 0.5)" />
-
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                    axisLine={false}
-                    tickLine={false}
+        {/* ── Cash Flow Impact Chart (Base vs Scenario, Live Preview) ── */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="text-sm font-semibold">
+                  {isAr ? "تأثير التدفق النقدي — توقعات ١٢ شهراً" : "Cash Flow Impact — 12‑Month Projection"}
+                </CardTitle>
+                <Badge variant="secondary" className="gap-1 font-normal text-xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                  </span>
+                  {isAr ? "معاينة حية" : "Live Preview"}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-5 border-t-2 border-dashed border-muted-foreground/60" />
+                  {isAr ? "التوقّع الأساسي" : "Base Forecast"}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-5 border-t-2 border-2"
+                    style={{ borderColor: isPositiveFlow ? "hsl(142 71% 45%)" : "hsl(0 72% 51%)" }}
                   />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={60}
-                    tickFormatter={fmtSARAxis}
-                  />
+                  {isAr ? "تأثير السيناريو" : "Scenario Impact"}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartDataWithBase} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="scenarioGreenGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(142 71% 45%)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(142 71% 45%)" stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="scenarioRedGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="hsl(0 72% 51%)" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(0 72% 51%)" stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
 
-                  <Tooltip content={<ChartTooltipContent />} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(240 5.9% 90% / 0.5)" />
 
-                  {/* Zero-cash danger line */}
-                  <ReferenceLine
-                    y={0}
-                    stroke="hsl(0 72% 51%)"
-                    strokeDasharray="4 4"
-                    strokeWidth={1.5}
-                  />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={60}
+                      tickFormatter={fmtAxis}
+                    />
 
-                  {/* Baseline starting balance */}
-                  <ReferenceLine
-                    y={currentCashBalance}
-                    stroke="hsl(240 3.8% 46.1%)"
-                    strokeDasharray="4 4"
-                    strokeWidth={1}
-                    label={{
-                      value: isAr ? "الأساس" : "Baseline",
-                      position: "insideTopRight",
-                      fontSize: 10,
-                      fill: "hsl(240 3.8% 46.1%)",
-                    }}
-                  />
+                    <Tooltip content={<ChartTooltipContent isAr={isAr} />} />
 
-                  <Area
-                    type="monotone"
-                    dataKey="cashBalance"
-                    stroke={isPositiveFlow ? "hsl(142 71% 45%)" : "hsl(0 72% 51%)"}
-                    strokeWidth={2}
-                    fill={isPositiveFlow ? "url(#greenGradient)" : "url(#redGradient)"}
-                    dot={false}
-                    activeDot={{ r: 4, strokeWidth: 0 }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+                    <Legend
+                      wrapperStyle={{ fontSize: 11 }}
+                      formatter={(value) => (value === "baseBalance" ? (isAr ? "التوقّع الأساسي" : "Base Forecast") : (isAr ? "تأثير السيناريو" : "Scenario Impact"))}
+                    />
+
+                    <ReferenceLine
+                      y={0}
+                      stroke="hsl(0 72% 51%)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                    />
+                    <ReferenceLine
+                      y={currentCashBalance}
+                      stroke="hsl(240 3.8% 46.1%)"
+                      strokeDasharray="4 4"
+                      strokeWidth={1}
+                      label={{
+                        value: isAr ? "الأساس" : "Baseline",
+                        position: "insideTopRight",
+                        fontSize: 10,
+                        fill: "hsl(240 3.8% 46.1%)",
+                      }}
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="baseBalance"
+                      name="baseBalance"
+                      stroke="hsl(240 3.8% 46.1%)"
+                      strokeWidth={2}
+                      strokeDasharray="5 4"
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 0 }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="cashBalance"
+                      name="cashBalance"
+                      stroke={isPositiveFlow ? "hsl(142 71% 45%)" : "hsl(0 72% 51%)"}
+                      strokeWidth={2}
+                      fill={isPositiveFlow ? "url(#scenarioGreenGradient)" : "url(#scenarioRedGradient)"}
+                      dot={false}
+                      activeDot={{ r: 5, strokeWidth: 2, stroke: "var(--background)" }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* ── Mustashar recommendation card ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.05 }}
+        >
+          <Card className="border-emerald-500/30 bg-gradient-to-br from-emerald-50/80 to-background dark:from-emerald-950/20 dark:to-background">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                {isAr ? "Mustashar يوصي" : "Mustashar Recommends"}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {isAr ? "توصية مبنية على السيناريو الحالي" : "Recommendation based on current scenario"}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed text-foreground">
+                {getMustasharRecommendation(assumptions, derived, fmt, isAr)}
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
 
       {/* ── Section divider ── */}
         <div className="flex items-center gap-3 pt-2">
@@ -439,7 +639,7 @@ export default function ScenarioPlannerPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <ForecastChart data={simulated} locale={locale} isAr={isAr} />
+              <ForecastChart data={simulated} fmt={fmt} fmtAxis={fmtAxis} isAr={isAr} />
             </CardContent>
           </Card>
 

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   GitMerge,
   RefreshCw,
@@ -44,23 +45,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
+import { TimeRangeButtons, type TimeRangeKey } from "@/components/charts/TimeRangeButtons";
+import { RechartsTooltipGlass } from "@/components/charts/ChartTooltipGlass";
+import { ChartExportButton } from "@/components/charts/ChartExportButton";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtSAR(n: number, short = false): string {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : n > 0 && short ? "+" : "";
-  if (abs >= 1_000_000) return `${sign}SAR ${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}SAR ${(abs / 1_000).toFixed(0)}K`;
-  return `${sign}SAR ${abs.toLocaleString("en-US")}`;
-}
-
-function fmtAxis(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(n);
-}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -211,7 +202,7 @@ const ENTITIES: Entity[] = [
 
 // ── Chart Data ───────────────────────────────────────────────────────────────
 
-const STACKED_BAR_DATA = [
+const STACKED_BAR_DATA_6 = [
   { month: "Sep", monthAr: "سبتمبر", hq: 380_000, construction: 320_000, trading: 140_000, tech: 70_000, properties: 20_000 },
   { month: "Oct", monthAr: "أكتوبر", hq: 400_000, construction: 340_000, trading: 150_000, tech: 75_000, properties: 22_000 },
   { month: "Nov", monthAr: "نوفمبر", hq: 420_000, construction: 350_000, trading: 160_000, tech: 80_000, properties: 18_000 },
@@ -219,6 +210,15 @@ const STACKED_BAR_DATA = [
   { month: "Jan", monthAr: "يناير", hq: 490_000, construction: 390_000, trading: 170_000, tech: 90_000, properties: 22_000 },
   { month: "Feb", monthAr: "فبراير", hq: 520_000, construction: 410_000, trading: 180_000, tech: 95_000, properties: 25_000 },
 ];
+const STACKED_BAR_DATA_EXTRA_6 = [
+  { month: "Mar", monthAr: "مارس", hq: 540_000, construction: 430_000, trading: 185_000, tech: 98_000, properties: 28_000 },
+  { month: "Apr", monthAr: "أبريل", hq: 565_000, construction: 445_000, trading: 192_000, tech: 102_000, properties: 26_000 },
+  { month: "May", monthAr: "مايو", hq: 590_000, construction: 460_000, trading: 198_000, tech: 108_000, properties: 30_000 },
+  { month: "Jun", monthAr: "يونيو", hq: 615_000, construction: 478_000, trading: 205_000, tech: 112_000, properties: 32_000 },
+  { month: "Jul", monthAr: "يوليو", hq: 640_000, construction: 495_000, trading: 210_000, tech: 118_000, properties: 28_000 },
+  { month: "Aug", monthAr: "أغسطس", hq: 665_000, construction: 510_000, trading: 218_000, tech: 122_000, properties: 35_000 },
+];
+const STACKED_BAR_DATA = [...STACKED_BAR_DATA_6, ...STACKED_BAR_DATA_EXTRA_6];
 
 const RADAR_DATA = [
   { dimension: "Liquidity", dimensionAr: "السيولة", hq: 90, construction: 80, trading: 70, tech: 65, properties: 40 },
@@ -258,39 +258,80 @@ const INTERCOMPANY_TRANSFERS: IntercompanyTransfer[] = [
   { fromId: "construction", fromEn: "Construction", fromAr: "المقاولات", fromColor: "#3b82f6", toId: "trading", toEn: "Trading", toAr: "التجارة", toColor: "#6366f1", amount: 50_000, date: "Feb 10", dateAr: "١٠ فبراير", purposeEn: "Material procurement", purposeAr: "شراء مواد" },
 ];
 
-// ── Custom Tooltips ──────────────────────────────────────────────────────────
+// ── Custom Tooltips (glass) ────────────────────────────────────────────────────
 
-function StackedBarTooltip({ active, payload, label }: any) {
+const STACK_KEYS = ["hq", "construction", "trading", "tech", "properties"] as const;
+
+function StackedBarTooltip({
+  active,
+  payload,
+  label,
+  fmtAxis,
+  chartData,
+  isAr,
+}: {
+  active?: boolean;
+  payload?: { dataKey: string; value?: number; name: string; color: string }[];
+  label?: string;
+  fmtAxis: (amountInSAR: number) => string;
+  chartData?: { month: string; monthAr: string; [k: string]: unknown }[];
+  isAr?: boolean;
+}) {
   if (!active || !payload?.length) return null;
-  const total = payload.reduce((s: number, p: any) => s + (p.value || 0), 0);
+  const total = payload.reduce((s, p) => s + (p.value ?? 0), 0);
+  const idx = chartData?.findIndex((d) => d.month === label || d.monthAr === label) ?? -1;
+  const row = idx >= 0 ? chartData?.[idx] : null;
+  const prevRow = idx > 0 ? chartData?.[idx - 1] : null;
+  const prevTotal = prevRow
+    ? STACK_KEYS.reduce((s, k) => s + (Number(prevRow[k]) || 0), 0)
+    : 0;
+  const pctChange =
+    prevTotal !== 0 && row
+      ? ((total - prevTotal) / prevTotal) * 100
+      : undefined;
+  const entityLabels: Record<string, { en: string; ar: string }> = {
+    hq: { en: "HQ", ar: "المقر الرئيسي" },
+    construction: { en: "Construction", ar: "المقاولات" },
+    trading: { en: "Trading", ar: "التجارة" },
+    tech: { en: "Tech", ar: "الحلول التقنية" },
+    properties: { en: "Properties", ar: "العقارية" },
+  };
+  const labelFormatted = isAr ? `${label} 2026` : `${label} 2026`;
+  const subLineParts = payload
+    .filter((p) => p.dataKey && p.dataKey !== "total")
+    .map((p) => {
+      const name = entityLabels[p.dataKey] ? (isAr ? entityLabels[p.dataKey].ar : entityLabels[p.dataKey].en) : p.dataKey;
+      return `${name}: ${fmtAxis(p.value ?? 0)}`;
+    });
+  const subLine = subLineParts.join(" | ");
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs min-w-[160px]">
-      <p className="font-semibold text-foreground mb-1">{label}</p>
-      {payload.map((p: any) => (
-        <div key={p.dataKey} className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2 h-2 rounded-full" style={{ background: p.color }} />
-            {p.name}
-          </span>
-          <span className="tabular-nums font-mono">{fmtAxis(p.value)}</span>
-        </div>
-      ))}
-      <div className="border-t mt-1 pt-1 font-semibold flex justify-between">
-        <span>Total</span>
-        <span className="tabular-nums font-mono">{fmtAxis(total)}</span>
-      </div>
-    </div>
+    <RechartsTooltipGlass
+      active={active}
+      payload={payload.map((p) => ({
+        name: entityLabels[p.dataKey] ? (isAr ? entityLabels[p.dataKey].ar : entityLabels[p.dataKey].en) : p.name,
+        value: p.value ?? 0,
+        color: p.color,
+        dataKey: p.dataKey,
+      }))}
+      label={labelFormatted}
+      fmt={fmtAxis}
+      pctChange={pctChange}
+      mainValue={total}
+      subLine={subLine}
+      isPremium
+    />
   );
 }
 
-function DonutTooltip({ active, payload }: any) {
+function DonutTooltip({ active, payload, fmt }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0];
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs">
-      <p className="font-semibold text-foreground">{d.name}</p>
-      <p className="tabular-nums font-mono">{fmtSAR(d.value)}</p>
-    </div>
+    <RechartsTooltipGlass
+      active={active}
+      payload={[{ name: d.name, value: d.value, color: d.payload?.color }]}
+      fmt={fmt ?? ((n: number) => n.toLocaleString())}
+    />
   );
 }
 
@@ -342,9 +383,18 @@ export default function GroupConsolidationPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
   const { profile } = useCompany();
+  void profile;
+  const { fmt, fmtAxis: fmtCurrAxis, selected: currCode } = useCurrency();
 
   const [filter, setFilter] = useState<"all" | "active" | "dormant">("all");
   const [expandedEntities, setExpandedEntities] = useState<Set<string>>(new Set());
+  const [chartTimeRange, setChartTimeRange] = useState<TimeRangeKey>("6m");
+  const groupChartRef = useRef<HTMLDivElement>(null);
+
+  const stackedBarData = useMemo(() => {
+    const n = chartTimeRange === "3m" ? 3 : chartTimeRange === "6m" ? 6 : chartTimeRange === "12m" ? 12 : STACKED_BAR_DATA.length;
+    return n >= STACKED_BAR_DATA.length ? STACKED_BAR_DATA : STACKED_BAR_DATA.slice(-n);
+  }, [chartTimeRange]);
 
   const toggleExpand = (id: string) => {
     setExpandedEntities(prev => {
@@ -368,11 +418,11 @@ export default function GroupConsolidationPage() {
 
   // ── KPI values ──
   const kpis = [
-    { labelEn: "Total Group Balance", labelAr: "إجمالي رصيد المجموعة", value: "SAR 4,820,000", valueAr: "٤٬٨٢٠٬٠٠٠ ر.س", color: "text-foreground", icon: Building2 },
-    { labelEn: "Total Inflows (MTD)", labelAr: "إجمالي التدفقات الداخلة (الشهر)", value: "+SAR 1,230,000", valueAr: "+١٬٢٣٠٬٠٠٠ ر.س", color: "text-emerald-600 dark:text-emerald-400", icon: TrendingUp },
-    { labelEn: "Total Outflows (MTD)", labelAr: "إجمالي التدفقات الخارجة (الشهر)", value: "-SAR 980,000", valueAr: "-٩٨٠٬٠٠٠ ر.س", color: "text-red-600 dark:text-red-400", icon: TrendingDown },
-    { labelEn: "Intercompany Transfers", labelAr: "التحويلات بين الشركات", value: "SAR 350,000", valueAr: "٣٥٠٬٠٠٠ ر.س", color: "text-indigo-600 dark:text-indigo-400", icon: ArrowRightLeft },
-    { labelEn: "Group Runway", labelAr: "مدرج المجموعة", value: "18.5 months", valueAr: "١٨.٥ شهر", color: "text-foreground", icon: Landmark },
+    { labelEn: "Total Group Balance", labelAr: "إجمالي رصيد المجموعة", value: fmt(4_820_000),    color: "text-foreground",                               icon: Building2 },
+    { labelEn: "Total Inflows (MTD)", labelAr: "إجمالي التدفقات الداخلة (الشهر)", value: `+${fmt(1_230_000)}`, color: "text-emerald-600 dark:text-emerald-400", icon: TrendingUp },
+    { labelEn: "Total Outflows (MTD)",labelAr: "إجمالي التدفقات الخارجة (الشهر)",value: `-${fmt(980_000)}`,   color: "text-red-600 dark:text-red-400",         icon: TrendingDown },
+    { labelEn: "Intercompany Transfers",labelAr: "التحويلات بين الشركات",        value: fmt(350_000),         color: "text-indigo-600 dark:text-indigo-400",   icon: ArrowRightLeft },
+    { labelEn: "Group Runway",        labelAr: "مدرج المجموعة",                  value: "18.5 months",        color: "text-foreground",                        icon: Landmark },
   ];
 
   return (
@@ -435,7 +485,7 @@ export default function GroupConsolidationPage() {
                     </span>
                   </div>
                   <p className={cn("text-lg font-bold tabular-nums", kpi.color)}>
-                    {isAr ? kpi.valueAr : kpi.value}
+                    {kpi.value}
                   </p>
                 </CardContent>
               </Card>
@@ -489,14 +539,14 @@ export default function GroupConsolidationPage() {
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
                             {isAr ? "الرصيد" : "Balance"}
                           </p>
-                          <p className="font-bold tabular-nums">{fmtSAR(entity.balance)}</p>
+                          <p className="font-bold tabular-nums">{fmt(entity.balance)}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
                             {isAr ? "الوارد" : "Inflow"}
                           </p>
                           <p className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">
-                            {fmtSAR(entity.inflowMTD, true)}
+                            +{fmt(entity.inflowMTD)}
                           </p>
                         </div>
                         <div className="text-center">
@@ -504,7 +554,7 @@ export default function GroupConsolidationPage() {
                             {isAr ? "الصادر" : "Outflow"}
                           </p>
                           <p className="font-medium tabular-nums text-red-600 dark:text-red-400">
-                            {fmtSAR(-entity.outflowMTD, true)}
+                            -{fmt(entity.outflowMTD)}
                           </p>
                         </div>
                         <HealthBadge score={entity.health} />
@@ -536,7 +586,7 @@ export default function GroupConsolidationPage() {
                               {isAr ? acc.nameAr : acc.nameEn}
                             </span>
                             <span className="font-mono text-xs font-medium tabular-nums">
-                              {fmtSAR(acc.balance)}
+                              {fmt(acc.balance)}
                             </span>
                           </div>
                         ))}
@@ -574,7 +624,7 @@ export default function GroupConsolidationPage() {
                                   : "text-red-600 dark:text-red-400"
                               )}
                             >
-                              {tx.amount >= 0 ? "+" : ""}{fmtSAR(tx.amount)}
+                              {tx.amount >= 0 ? "+" : "-"}{fmt(Math.abs(tx.amount))}
                             </span>
                           </div>
                         ))}
@@ -592,48 +642,71 @@ export default function GroupConsolidationPage() {
           {/* Stacked Bar Chart */}
           <Card className="lg:col-span-3">
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                {isAr ? "التدفق النقدي للمجموعة (٦ أشهر)" : "Group Cash Flow (6 Months)"}
-              </CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-base">
+                  {isAr ? "التدفق النقدي للمجموعة" : "Group Cash Flow"}
+                </CardTitle>
+                <div className="flex items-center gap-3">
+                  <TimeRangeButtons value={chartTimeRange} onChange={setChartTimeRange} isAr={isAr} />
+                  <ChartExportButton chartRef={groupChartRef} downloadLabel="group-cash-flow" isAr={isAr} />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart
-                  data={STACKED_BAR_DATA}
-                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              <div ref={groupChartRef}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={chartTimeRange}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="w-full"
                 >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis
-                    dataKey={isAr ? "monthAr" : "month"}
-                    tick={{ fontSize: 11 }}
-                    className="fill-muted-foreground"
-                  />
-                  <YAxis
-                    tickFormatter={fmtAxis}
-                    tick={{ fontSize: 11 }}
-                    className="fill-muted-foreground"
-                  />
-                  <Tooltip content={<StackedBarTooltip />} />
-                  <Legend
-                    wrapperStyle={{ fontSize: 11 }}
-                    formatter={(value: string) => {
-                      const labels: Record<string, { en: string; ar: string }> = {
-                        hq: { en: "HQ", ar: "المقر الرئيسي" },
-                        construction: { en: "Construction", ar: "المقاولات" },
-                        trading: { en: "Trading", ar: "التجارة" },
-                        tech: { en: "Tech", ar: "الحلول التقنية" },
-                        properties: { en: "Properties", ar: "العقارية" },
-                      };
-                      return isAr ? labels[value]?.ar ?? value : labels[value]?.en ?? value;
-                    }}
-                  />
-                  <Bar dataKey="hq" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
-                  <Bar dataKey="construction" stackId="a" fill="#3b82f6" />
-                  <Bar dataKey="trading" stackId="a" fill="#6366f1" />
-                  <Bar dataKey="tech" stackId="a" fill="#f59e0b" />
-                  <Bar dataKey="properties" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <BarChart
+                      data={stackedBarData}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis
+                        dataKey={isAr ? "monthAr" : "month"}
+                        tick={{ fontSize: 11 }}
+                        className="fill-muted-foreground"
+                      />
+                      <YAxis
+                        tickFormatter={fmtCurrAxis}
+                        tick={{ fontSize: 11 }}
+                        className="fill-muted-foreground"
+                      />
+                      <Tooltip
+                        content={<StackedBarTooltip fmtAxis={fmtCurrAxis} chartData={stackedBarData} isAr={isAr} />}
+                        key={currCode}
+                        cursor={{ fill: "hsl(142 71% 45% / 0.12)", radius: 8 }}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: 11 }}
+                        formatter={(value: string) => {
+                          const labels: Record<string, { en: string; ar: string }> = {
+                            hq: { en: "HQ", ar: "المقر الرئيسي" },
+                            construction: { en: "Construction", ar: "المقاولات" },
+                            trading: { en: "Trading", ar: "التجارة" },
+                            tech: { en: "Tech", ar: "الحلول التقنية" },
+                            properties: { en: "Properties", ar: "العقارية" },
+                          };
+                          return isAr ? labels[value]?.ar ?? value : labels[value]?.en ?? value;
+                        }}
+                      />
+                      <Bar dataKey="hq" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} isAnimationActive animationDuration={300} activeBar={{ stroke: "#10b981", strokeWidth: 1.5 }} />
+                      <Bar dataKey="construction" stackId="a" fill="#3b82f6" isAnimationActive animationDuration={300} activeBar={{ stroke: "#3b82f6", strokeWidth: 1.5 }} />
+                      <Bar dataKey="trading" stackId="a" fill="#6366f1" isAnimationActive animationDuration={300} activeBar={{ stroke: "#6366f1", strokeWidth: 1.5 }} />
+                      <Bar dataKey="tech" stackId="a" fill="#f59e0b" isAnimationActive animationDuration={300} activeBar={{ stroke: "#f59e0b", strokeWidth: 1.5 }} />
+                      <Bar dataKey="properties" stackId="a" fill="#ef4444" radius={[4, 4, 0, 0]} isAnimationActive animationDuration={300} activeBar={{ stroke: "#ef4444", strokeWidth: 1.5, radius: [4, 4, 0, 0] }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </motion.div>
+              </AnimatePresence>
+              </div>
             </CardContent>
           </Card>
 
@@ -662,7 +735,7 @@ export default function GroupConsolidationPage() {
                       <Cell key={d.name} fill={d.color} />
                     ))}
                   </Pie>
-                  <Tooltip content={<DonutTooltip />} />
+                  <Tooltip content={<DonutTooltip fmt={fmt} />} key={currCode} />
                   <text
                     x="50%"
                     y="47%"
@@ -670,7 +743,7 @@ export default function GroupConsolidationPage() {
                     dominantBaseline="middle"
                     className="fill-foreground text-lg font-bold"
                   >
-                    SAR 4.82M
+                    {fmt(4_820_000)}
                   </text>
                   <text
                     x="50%"
@@ -736,7 +809,7 @@ export default function GroupConsolidationPage() {
                   {/* Amount + details */}
                   <div className="flex items-center gap-3 ms-auto text-xs flex-shrink-0">
                     <span className="font-bold tabular-nums text-indigo-600 dark:text-indigo-400">
-                      {fmtSAR(t.amount)}
+                      {fmt(t.amount)}
                     </span>
                     <span className="text-muted-foreground hidden sm:inline">
                       {isAr ? t.dateAr : t.date}
@@ -800,7 +873,7 @@ export default function GroupConsolidationPage() {
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     {isAr
                       ? "سيولة المجموعة قوية عند ٤.٨٢ مليون ر.س. لكن مؤشر صحة تدفق العقارية انخفض إلى ٤٥/١٠٠ — يُنصح بضخ ١٠٠ ألف ر.س من فائض المقر الرئيسي أو تجميد النشاط لتقليل الحرق. تدفق للمقاولات أداؤها جيد لكن لديها ٢٨٠ ألف ر.س مستحقات متأخرة."
-                      : "Group liquidity is strong at SAR 4.82M. However, Tadfuq Properties health score dropped to 45/100 — consider injecting SAR 100K from HQ surplus or initiating dormancy freeze to reduce burn. Construction LLC is performing well but has SAR 280K in overdue receivables."}
+                      : `Group liquidity is strong at ${fmt(4_820_000)}. However, Tadfuq Properties health score dropped to 45/100 — consider injecting ${fmt(100_000)} from HQ surplus or initiating dormancy freeze to reduce burn. Construction LLC is performing well but has ${fmt(280_000)} in overdue receivables.`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

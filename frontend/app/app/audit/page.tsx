@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
 import { listAuditLogs } from "@/lib/api/tenant-api";
+import { getMockAuditLogs } from "@/lib/api/mock-data";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,10 +15,12 @@ function AuditPageContent() {
   const { t, locale } = useI18n();
   const { currentTenant } = useTenant();
   const loc = locale === "ar" ? "ar-SA" : "en-SA";
+  const isDemo = currentTenant?.id === "demo";
 
   const { data, isLoading } = useQuery({
     queryKey: ["audit-logs", currentTenant?.id],
-    queryFn: () => listAuditLogs(50, 0),
+    queryFn: () =>
+      isDemo ? Promise.resolve({ data: getMockAuditLogs(), meta: { total: 3, limit: 50, offset: 0 } }) : listAuditLogs(50, 0),
     enabled: !!currentTenant,
   });
 

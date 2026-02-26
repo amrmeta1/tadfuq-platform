@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 // ── Types & mock data ──────────────────────────────────────────────────────────
 
@@ -39,30 +40,13 @@ function buildEntities(name: string, isAr: boolean): Subsidiary[] {
   ];
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmt(n: number, curr: string): string {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "+";
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M ${curr}`;
-  if (abs >= 1_000)     return `${sign}${(abs / 1_000).toFixed(0)}k ${curr}`;
-  return `${sign}${abs.toLocaleString("en-US")} ${curr}`;
-}
-
-function fmtFull(n: number, curr: string): string {
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  return `${sign}${abs.toLocaleString("en-US", { minimumFractionDigits: 2 })} ${curr}`;
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function HQHubPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
-  const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
-  const companyName = profile.companyName || (isAr ? "المجموعة" : "The Group");
+  const { fmt, selected: curr } = useCurrency();
+  const companyName = isAr ? "المجموعة" : "The Group";
 
   const STATUS_META = getStatusMeta(isAr);
   const ENTITIES = buildEntities(companyName, isAr);
@@ -95,7 +79,7 @@ export default function HQHubPage() {
           <div className="flex flex-wrap gap-3 mt-4">
             <div className="rounded-lg border bg-card p-3 min-w-[170px]">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">{isAr ? "السيولة المجمعة" : "Total Liquidity"}</p>
-              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>18,450,000 {curr}</p>
+              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>{fmt(18_450_000)}</p>
               <div className="text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5">{isAr ? "موزعة على 5 فروع" : "Across 5 branches"}</div>
             </div>
             <div className="rounded-lg border bg-card p-3 min-w-[150px]">
@@ -106,7 +90,7 @@ export default function HQHubPage() {
             </div>
             <div className="rounded-lg border bg-card p-3 min-w-[170px]">
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider mb-1">{isAr ? "فائض متاح" : "Available Surplus"}</p>
-              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>2,100,000 {curr}</p>
+              <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>{fmt(2_100_000)}</p>
               <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">{isAr ? "↗ متاح للتحويل" : "↗ Available for Transfer"}</div>
             </div>
           </div>
@@ -143,7 +127,7 @@ export default function HQHubPage() {
                     <p className="text-[11px] text-muted-foreground">{entity.runway}</p>
                   </div>
                   <p className={`text-sm font-bold tabular-nums shrink-0 ${isNeg ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`} suppressHydrationWarning>
-                    <span dir="ltr">{fmt(entity.balance, curr)}</span>
+                    <span dir="ltr">{fmt(entity.balance)}</span>
                   </p>
                 </div>
               );
@@ -161,7 +145,7 @@ export default function HQHubPage() {
             {isAr ? "فرع" : "Branch"}: {selected.sector}
           </p>
           <p className={`text-3xl font-bold tabular-nums mt-2 ${selected.balance < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"}`} suppressHydrationWarning>
-            <span dir="ltr">{fmtFull(selected.balance, curr)}</span>
+            <span dir="ltr">{fmt(selected.balance)}</span>
           </p>
           <div className="flex items-center gap-2 mt-3 flex-wrap">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${selMeta.badgeCls}`}>
@@ -178,6 +162,7 @@ export default function HQHubPage() {
             <div><p className="font-medium text-foreground">{isAr ? "البنك" : "Bank"}</p><p>{isAr ? "QNB — الجاري" : "QNB — Current"}</p></div>
             <div><p className="font-medium text-foreground">{isAr ? "آخر تحديث" : "Last Updated"}</p><p>{isAr ? "اليوم، 02:14 ص" : "Today, 02:14 AM"}</p></div>
             <div><p className="font-medium text-foreground">{isAr ? "العملة" : "Currency"}</p><p suppressHydrationWarning>{curr}</p></div>
+
           </div>
         </Card>
 
@@ -198,16 +183,16 @@ export default function HQHubPage() {
             <p className="text-sm text-foreground leading-relaxed" suppressHydrationWarning>
               {isAr ? (
                 <>
-                  قطاع المقاولات سيواجه عجزاً بقيمة <strong>45,000 {curr}</strong> لسداد الرواتب.
+                  قطاع المقاولات سيواجه عجزاً بقيمة <strong>{fmt(45_000)}</strong> لسداد الرواتب.
                   في المقابل، يمتلك <strong>(قطاع التجزئة)</strong> فائضاً نقدياً غير مستغل بقيمة{" "}
-                  <strong>2.1 مليون {curr}</strong> في بنك QNB. أنصح بتنفيذ تحويل داخلي
+                  <strong>{fmt(2_100_000)}</strong> في بنك QNB. أنصح بتنفيذ تحويل داخلي
                   (Inter-company Loan) لتجنب السحب على المكشوف وتوفير 7% فوائد بنكية.
                 </>
               ) : (
                 <>
-                  The Contracting sector faces a <strong>45,000 {curr}</strong> payroll shortfall.
+                  The Contracting sector faces a <strong>{fmt(45_000)}</strong> payroll shortfall.
                   Meanwhile, the <strong>Retail sector</strong> holds an unused cash surplus of{" "}
-                  <strong>2.1M {curr}</strong> at QNB. We recommend an inter-company loan
+                  <strong>{fmt(2_100_000)}</strong> at QNB. We recommend an inter-company loan
                   to avoid overdraft and save 7% in bank interest.
                 </>
               )}
@@ -221,7 +206,7 @@ export default function HQHubPage() {
             </span>
             <ArrowRightLeft className="h-4 w-4 text-indigo-500 shrink-0" />
             <span className="rounded-md bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 text-xs font-bold px-2.5 py-1.5 border border-indigo-300 dark:border-indigo-800 tabular-nums" suppressHydrationWarning>
-              45,000 {curr}
+              {fmt(45_000)}
             </span>
             <ArrowRightLeft className="h-4 w-4 text-indigo-500 shrink-0" />
             <span className="rounded-md bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 text-xs font-semibold px-2.5 py-1.5 border border-red-300 dark:border-red-800">
@@ -234,15 +219,15 @@ export default function HQHubPage() {
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <p className="text-xs text-destructive leading-relaxed" suppressHydrationWarning>
                 {isAr
-                  ? `تحذير: بدون تدخل فوري، سيتجاوز الرصيد حد السحب على المكشوف المصرح به (100,000 ${curr}) خلال 14 يوماً.`
-                  : `Warning: Without immediate action, the balance will exceed the authorized overdraft limit (100,000 ${curr}) within 14 days.`}
+                  ? `تحذير: بدون تدخل فوري، سيتجاوز الرصيد حد السحب على المكشوف المصرح به (${fmt(100_000)}) خلال 14 يوماً.`
+                  : `Warning: Without immediate action, the balance will exceed the authorized overdraft limit (${fmt(100_000)}) within 14 days.`}
               </p>
             </div>
           )}
 
           <div className="flex flex-col gap-2 mt-auto">
             <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2" size="sm" suppressHydrationWarning>
-              {isAr ? `⚡ تنفيذ تحويل داخلي بقيمة 50,000 ${curr}` : `⚡ Execute Internal Transfer — 50,000 ${curr}`}
+              {isAr ? `⚡ تنفيذ تحويل داخلي بقيمة ${fmt(50_000)}` : `⚡ Execute Internal Transfer — ${fmt(50_000)}`}
             </Button>
             <Button variant="outline" className="w-full border-destructive text-destructive hover:bg-destructive/5 gap-2" size="sm">
               {isAr ? "طلب تسهيلات ائتمانية من البنك" : "Request Bank Credit Facility"}

@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -119,8 +120,8 @@ const TRANSACTIONS_BY_DATE: Record<string, Transaction[]> = {
 
 // ── Custom tooltip ─────────────────────────────────────────────────────────────
 
-function ChartTooltip({ active, payload, label, currency }: {
-  active?: boolean; payload?: any[]; label?: string; currency: string;
+function ChartTooltip({ active, payload, label, fmt }: {
+  active?: boolean; payload?: any[]; label?: string; fmt: (n: number) => string;
 }) {
   if (!active || !payload?.length) return null;
   const actual = payload.find((p) => p.dataKey === "actual");
@@ -135,7 +136,7 @@ function ChartTooltip({ active, payload, label, currency }: {
             Actual
           </span>
           <span className="font-mono font-semibold tabular-nums text-foreground" dir="ltr">
-            {fmtAbs(actual.value)} {currency}
+            {fmt(actual.value)}
           </span>
         </div>
       )}
@@ -146,7 +147,7 @@ function ChartTooltip({ active, payload, label, currency }: {
             Forecast
           </span>
           <span className="font-mono font-semibold tabular-nums text-muted-foreground" dir="ltr">
-            {fmtAbs(forecast.value)} {currency}
+            {fmt(forecast.value)}
           </span>
         </div>
       )}
@@ -160,7 +161,8 @@ export default function CashPositioningPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
   const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  void profile;
+  const { fmt, fmtAxis, selected: currCode } = useCurrency();
 
   // Selected date (clicking chart point or account)
   const [selectedDate, setSelectedDate] = useState("19 Dec");
@@ -238,8 +240,7 @@ export default function CashPositioningPage() {
           <div className="mt-4 flex items-end gap-3 flex-wrap">
             <div>
               <p className="text-3xl font-bold tabular-nums tracking-tight" dir="ltr" suppressHydrationWarning>
-                +16,787,545.78{" "}
-                <span className="text-xl font-semibold text-muted-foreground">{curr}</span>
+                {fmt(16_787_545)}
               </p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <span className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md font-medium">
@@ -310,14 +311,9 @@ export default function CashPositioningPage() {
                   axisLine={false}
                   tickLine={false}
                   width={54}
-                  tickFormatter={(v: number) => {
-                    const abs = Math.abs(v);
-                    if (abs >= 1_000_000) return `${v < 0 ? "-" : ""}${(abs / 1_000_000).toFixed(0)}M`;
-                    if (abs >= 1_000)     return `${v < 0 ? "-" : ""}${(abs / 1_000).toFixed(0)}k`;
-                    return String(v);
-                  }}
+                  tickFormatter={fmtAxis}
                 />
-                <Tooltip content={<ChartTooltip currency={curr} />} />
+                <Tooltip content={<ChartTooltip fmt={fmt} />} key={currCode} />
 
                 {/* Zero reference */}
                 <ReferenceLine y={0} stroke="hsl(240 3.8% 46.1%)" strokeOpacity={0.3} strokeWidth={1} />
@@ -447,7 +443,7 @@ export default function CashPositioningPage() {
                         <span className="flex items-center justify-end gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${acc.prevBalance < 0 ? "bg-destructive" : "bg-emerald-500"}`} />
                           <span className={acc.prevBalance < 0 ? "text-destructive" : ""}>
-                            {fmtAbs(acc.prevBalance)} {curr}
+                            {fmt(acc.prevBalance)}
                           </span>
                         </span>
                       </td>
@@ -457,7 +453,7 @@ export default function CashPositioningPage() {
                       )} suppressHydrationWarning>
                         <span className="flex items-center justify-end gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isNegToday ? "bg-destructive" : "bg-emerald-500"}`} />
-                          {fmtAbs(acc.todayBalance)} {curr}
+                          {fmt(acc.todayBalance)}
                         </span>
                       </td>
                       <td className="p-2.5 text-end tabular-nums">
@@ -499,7 +495,7 @@ export default function CashPositioningPage() {
             {selectedAccount.overdraftLimit && (
               <div className="flex items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 px-2.5 py-1.5 text-[11px] font-medium text-destructive shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse shrink-0" />
-                <span dir="ltr">OD Limit: {Math.abs(selectedAccount.overdraftLimit).toLocaleString()} {curr}</span>
+                <span dir="ltr">OD Limit: {fmt(Math.abs(selectedAccount.overdraftLimit))}</span>
               </div>
             )}
           </div>
@@ -545,8 +541,8 @@ export default function CashPositioningPage() {
                 </p>
                 <p className="text-[10px] text-muted-foreground">
                   {isAr
-                    ? `${fmtAbs(vatAmount)} ${curr} مجمدة للزكاة والضريبة`
-                    : `${fmtAbs(vatAmount)} ${curr} locked for ZATCA`}
+                    ? `${fmt(vatAmount)} مجمدة للزكاة والضريبة`
+                    : `${fmt(vatAmount)} locked for ZATCA`}
                 </p>
               </div>
               <Badge className="text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-medium px-2 h-5">
@@ -582,8 +578,8 @@ export default function CashPositioningPage() {
                   </div>
                   <p className="text-xs text-foreground/80 leading-relaxed mt-1.5">
                     {isAr
-                      ? <>رصيد HSBC سيتجاوز حد السحب المكشوف المرخص (<strong>460,000 {curr}</strong>) بحلول <strong>25 ديسمبر</strong> بسبب دفعات الموردين. أنصح بتحويل <strong>3.4M {curr}</strong> من QNB لتجنب الغرامات.</>
-                      : <>HSBC will breach its authorized overdraft of <strong>{curr} 460,000</strong> by <strong>Dec 25</strong> due to supplier payouts. Consider transferring <strong>{curr} 3.4M</strong> from QNB Corporate to avoid penalty charges.</>
+                      ? <>رصيد HSBC سيتجاوز حد السحب المكشوف المرخص (<strong>{fmt(460_000)}</strong>) بحلول <strong>25 ديسمبر</strong> بسبب دفعات الموردين. أنصح بتحويل <strong>{fmt(3_400_000)}</strong> من QNB لتجنب الغرامات.</>
+                      : <>HSBC will breach its authorized overdraft of <strong>{fmt(460_000)}</strong> by <strong>Dec 25</strong> due to supplier payouts. Consider transferring <strong>{fmt(3_400_000)}</strong> from QNB Corporate to avoid penalty charges.</>
                     }
                   </p>
                   <div className="flex gap-2 mt-3">

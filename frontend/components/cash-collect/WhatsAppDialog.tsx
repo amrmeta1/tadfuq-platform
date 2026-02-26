@@ -12,26 +12,20 @@ import type { Receivable } from "./types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtSAR(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
-  return n.toLocaleString("en-US");
-}
-
-function buildWhatsAppMessage(receivable: Receivable, isAr: boolean): string {
-  const amount = `SAR ${fmtSAR(receivable.amount)}`;
+function buildWhatsAppMessage(receivable: Receivable, isAr: boolean, fmt: (n: number) => string): string {
+  const amount = fmt(receivable.amount);
   const days = receivable.daysOverdue;
   const ref = receivable.invoiceRef;
 
   if (isAr) {
-    return `مرحباً عزيزي،\n\nنتمنى أن تكونوا بخير. 🌟\n\nنود تذكيركم بلطف بوجود فاتورة مستحقة بقيمة *${amount}* ريال منذ *${days} يوماً* (مرجع: ${ref}).\n\nنرفق لكم رابط الدفع السريع لتجنب إيقاف الخدمات. يسعدنا تسهيل الأمر بأي طريقة دفع تناسبكم.\n\nشكراً لتعاونكم الكريم. 🙏`;
+    return `مرحباً عزيزي،\n\nنتمنى أن تكونوا بخير. 🌟\n\nنود تذكيركم بلطف بوجود فاتورة مستحقة بقيمة *${amount}* منذ *${days} يوماً* (مرجع: ${ref}).\n\nنرفق لكم رابط الدفع السريع لتجنب إيقاف الخدمات. يسعدنا تسهيل الأمر بأي طريقة دفع تناسبكم.\n\nشكراً لتعاونكم الكريم. 🙏`;
   }
 
   return `Hello,\n\nWe hope you're doing well. 🌟\n\nThis is a gentle reminder that invoice *${ref}* for *${amount}* has been outstanding for *${days} days*.\n\nWe've attached a quick payment link to help resolve this at your earliest convenience.\n\nThank you for your continued partnership. 🙏`;
 }
 
-function buildWhatsAppUrl(receivable: Receivable, isAr: boolean): string {
-  const msg = buildWhatsAppMessage(receivable, isAr);
+function buildWhatsAppUrl(receivable: Receivable, isAr: boolean, fmt: (n: number) => string): string {
+  const msg = buildWhatsAppMessage(receivable, isAr, fmt);
   return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }
 
@@ -42,6 +36,7 @@ interface WhatsAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isAr: boolean;
+  fmt: (n: number) => string;
 }
 
 export function WhatsAppDialog({
@@ -49,11 +44,12 @@ export function WhatsAppDialog({
   open,
   onOpenChange,
   isAr,
+  fmt,
 }: WhatsAppDialogProps) {
   if (!receivable) return null;
 
-  const message = buildWhatsAppMessage(receivable, isAr);
-  const waUrl = buildWhatsAppUrl(receivable, isAr);
+  const message = buildWhatsAppMessage(receivable, isAr, fmt);
+  const waUrl = buildWhatsAppUrl(receivable, isAr, fmt);
   const clientName = isAr ? receivable.clientAr : receivable.client;
 
   return (
@@ -72,7 +68,7 @@ export function WhatsAppDialog({
         <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
           <span>{receivable.invoiceRef}</span>
           <span className="tabular-nums font-semibold text-foreground">
-            SAR {fmtSAR(receivable.amount)}
+            {fmt(receivable.amount)}
           </span>
           {receivable.daysOverdue > 0 && (
             <span className="text-destructive font-medium">

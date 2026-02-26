@@ -53,7 +53,15 @@ export type Role =
   | "tenant_admin"
   | "owner"
   | "finance_manager"
-  | "accountant_readonly";
+  | "accountant_readonly"
+  | "group_cfo"
+  | "treasury_director"
+  | "financial_controller"
+  | "ap_manager"
+  | "ar_manager"
+  | "bank_relationship_manager"
+  | "auditor_readonly"
+  | "board_member";
 
 export interface Membership {
   id: string;

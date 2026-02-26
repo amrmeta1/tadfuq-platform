@@ -312,22 +312,40 @@ Full OpenAPI spec: [`openapi/ingestion.yaml`](openapi/ingestion.yaml)
 
 ## RBAC Permission Matrix
 
-| Permission | tenant_admin | owner | finance_manager | accountant_readonly |
-|-----------|:---:|:---:|:---:|:---:|
-| `tenant:create` | ✓ | ✓ | | |
-| `tenant:read` | ✓ | ✓ | ✓ | ✓ |
-| `tenant:update` | ✓ | ✓ | | |
-| `tenant:delete` | ✓ | | | |
-| `member:add` | ✓ | ✓ | | |
-| `member:remove` | ✓ | ✓ | | |
-| `member:read` | ✓ | ✓ | ✓ | ✓ |
-| `member:role_change` | ✓ | | | |
-| `audit:read` | ✓ | ✓ | ✓ | |
-| `ingestion:import` | ✓ | ✓ | ✓ | |
-| `ingestion:read` | ✓ | ✓ | ✓ | ✓ |
-| `ingestion:sync` | ✓ | ✓ | ✓ | |
-| `bank_account:create` | ✓ | ✓ | ✓ | |
-| `bank_account:read` | ✓ | ✓ | ✓ | ✓ |
+Roles (12): `tenant_admin`, `owner`, `finance_manager`, `accountant_readonly` (core); `group_cfo`, `treasury_director`, `financial_controller`, `ap_manager`, `ar_manager`, `bank_relationship_manager`, `auditor_readonly`, `board_member` (enterprise).
+
+| Permission | tenant_admin | owner | finance_manager | accountant_readonly | group_cfo | treasury_director | financial_controller | ap_manager | ar_manager | bank_relationship_manager | auditor_readonly | board_member |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `tenant:create` | ✓ | ✓ | | | ✓ | | | | | | | |
+| `tenant:read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | | ✓ | ✓ | |
+| `tenant:update` | ✓ | ✓ | | | ✓ | | | | | | | |
+| `tenant:delete` | ✓ | | | | ✓ | | | | | | | |
+| `member:add` | ✓ | ✓ | | | ✓ | | | | | | | |
+| `member:read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | | | ✓ | |
+| `member:remove` | ✓ | ✓ | | | ✓ | | | | | | | |
+| `member:role_change` | ✓ | ✓ | | | ✓ | | | | | | | |
+| `role:create` | ✓ | | | | ✓ | | | | | | | |
+| `role:read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | | | ✓ | |
+| `role:update` | ✓ | | | | ✓ | | | | | | | |
+| `audit:read` | ✓ | ✓ | ✓ | | ✓ | | | | | | ✓ | |
+| `audit:export` | | | | | ✓ | | | | | | ✓ | |
+| `user:read_self` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ingestion:import` | ✓ | ✓ | ✓ | | ✓ | | | | | | | |
+| `ingestion:read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | | | ✓ | |
+| `ingestion:sync` | ✓ | ✓ | ✓ | | ✓ | | | | | | | |
+| `bank_account:create` | ✓ | ✓ | ✓ | | ✓ | | | | | | | |
+| `bank_account:read` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | | ✓ | ✓ | |
+| `treasury:read` | | | | | ✓ | ✓ | | | | | | |
+| `treasury:write` | | | | | ✓ | ✓ | | | | | | |
+| `fx:read` | | | | | ✓ | ✓ | | | | | | |
+| `fx:write` | | | | | ✓ | ✓ | | | | | | |
+| `forecast:read` | | | | | ✓ | ✓ | | | | | | |
+| `forecast:write` | | | | | ✓ | ✓ | | | | | | |
+| `payables:read` | | | | | ✓ | | | ✓ | | | | |
+| `payables:write` | | | | | ✓ | | | ✓ | | | | |
+| `receivables:read` | | | | | ✓ | | | | ✓ | | | |
+| `receivables:write` | | | | | ✓ | | | | ✓ | | | |
+| `report:executive` | | | | | ✓ | | | | | | | ✓ |
 
 ## Ingestion Service — Data Model
 
@@ -373,3 +391,128 @@ Services communicate via RabbitMQ events and share tenant identity context via K
 | Containerization | Docker |
 | CI/CD | GitHub Actions |
 | IaC | Terraform (AWS) |
+
+## كيف تشغّل المشروع (Frontend + Backend)
+
+1. **البنية التحتية (مرة واحدة):** من جذر المشروع:
+   ```bash
+   make up-deps
+   make migrate
+   ```
+2. **الـ Backend (tenant-service):** في طرفية منفصلة:
+   ```bash
+   DB_PORT=5433 make run
+   ```
+   (المنفذ 5433 لأن Docker يعرّض Postgres عليه محلياً.)
+3. **الواجهة (Frontend):** في طرفية ثالثة:
+   ```bash
+   cd frontend && npm run dev
+   ```
+   إذا ظهر `EADDRINUSE` على 3000 فاستخدم: `npx next dev -p 3001` وافتح http://localhost:3001
+4. **الدخول:** افتح http://localhost:3000 (أو 3001). مع `NEXT_PUBLIC_DEV_SKIP_AUTH=true` في `frontend/.env` تدخل بدون تسجيل.
+
+---
+
+## Frontend — تشغيل واستكشاف الأخطاء
+
+- **تشغيل الواجهة:** من مجلد المشروع: `cd frontend && npm run dev` ثم افتح **نفس الرابط** الذي يظهر في الطرفية (مثلاً `http://localhost:3000`). إذا كان المنفذ 3000 مستخدماً ستظهر رسالة خطأ — أوقف العملية التي تستخدمه أو شغّل على منفذ آخر: `npx next dev -p 3001`.
+- **الصفحة الرئيسية:** الرابط `/` يحوّل تلقائياً إلى `/home`. تأكد أنك تفتح نفس منفذ السيرفر (مثلاً 3000 أو 3001).
+- **لوحة التحكم `/app/dashboard`:** تحتاج تسجيل الدخول. إذا كان `NEXT_PUBLIC_DEV_SKIP_AUTH=true` في `frontend/.env` يمكن الدخول بدون تسجيل. أول دخول قد يحوّلك إلى `/app/onboarding` — أكمل الإعداد لرؤية الـ dashboard.
+- **اسأل مستشار (Command Palette):** من أي صفحة داخل التطبيق يمكنك الضغط **Cmd+K** (أو Ctrl+K) أو النقر على زر **اسأل مستشار** الأخضر أسفل يمين الشاشة لفتح قائمة الأوامر: تنقل سريع، إجراءات (استيراد، تقارير، تصدير PDF)، وأوامر الذكاء الاصطناعي (رقيب، متوقع، مستشار). اختيار أمر AI يفتح محادثة مستشار مع السؤال مملوء مسبقاً.
+- إذا استمرت المشكلة: افتح أدوات المطوّر (F12) → تبويب Console وانسخ أي رسالة خطأ باللون الأحمر.
+
+### Keycloak لا ينقل بعد Sign in
+
+- **NEXTAUTH_URL:** في `frontend/.env` يجب أن يساوي **نفس الرابط** الذي تفتح فيه الموقع في المتصفح. إذا فتحت `http://127.0.0.1:3000` فضع `NEXTAUTH_URL=http://127.0.0.1:3000`؛ إذا `http://localhost:3000` فضع `NEXTAUTH_URL=http://localhost:3000`.
+- **NEXTAUTH_SECRET:** يجب أن يكون معرّفاً (سطر غير فارغ)، وإلا قد يفشل التوجيه بعد تسجيل الدخول.
+- **Redirect URIs في Keycloak:** الـ realm المستورد يتضمّن `http://localhost:3000/api/auth/callback/keycloak` ونسخة `127.0.0.1`. إذا كان Keycloak قديم أو تم تعديله يدوياً: من لوحة Keycloak (http://localhost:8180) → Realm **cashflow** → Clients → **cashflow-api** → تبويب **Settings** → تأكد أن **Valid redirect URIs** تحتوي على:
+  - `http://localhost:3000/*` أو على الأقل `http://localhost:3000/api/auth/callback/keycloak`
+  - وإذا كنت تستخدم 127.0.0.1: `http://127.0.0.1:3000/*` أو `http://127.0.0.1:3000/api/auth/callback/keycloak`
+- **Web origins:** في نفس الصفحة تأكد أن **Web origins** تحتوي على `http://localhost:3000` أو `http://127.0.0.1:3000` حسب ما تستخدمه.
+- بعد أي تعديل على الـ realm: أعد تشغيل Keycloak أو أعد استيراد الـ realm من `deploy/keycloak/realm-export.json`.
+
+## Testing RBAC — تجربة الصلاحيات
+
+### 1. تجربة من الواجهة (Frontend)
+
+**أ) بدون تسجيل دخول (أدوار ثابتة):**
+
+- في `frontend/.env` ضع `NEXT_PUBLIC_DEV_SKIP_AUTH=true`.
+- شغّل الواجهة: `cd frontend && npm run dev`.
+- ادخل على `/app/dashboard` — ستُعامل كـ `tenant_admin` + `owner` (ترى كل القوائم والإعدادات).
+
+**ب) مع Keycloak (أدوار حقيقية):**
+
+1. شغّل البنية التحتية: `make up-deps` (يشغّل Postgres + Keycloak + NATS + RabbitMQ).
+2. انتظر Keycloak حتى يجهز الـ realm (من الـ import)، ثم شغّل الـ tenant-service: `make run` (أو عبر Docker).
+3. في `frontend/.env`: **أزل أو عطّل** `NEXT_PUBLIC_DEV_SKIP_AUTH` (أو ضعها `false`)، وضبط:
+   - `KEYCLOAK_ISSUER=http://localhost:8180/realms/cashflow`
+   - `KEYCLOAK_CLIENT_ID=cashflow-api`
+   - `KEYCLOAK_CLIENT_SECRET=cashflow-api-secret`
+   - `NEXTAUTH_URL=http://localhost:3000`
+4. شغّل الواجهة: `cd frontend && npm run dev`.
+5. ادخل على `/login` وسجّل الدخول بمستخدم Keycloak. **أنشئ في Keycloak مستخدمين واعطِ كل واحد دوراً مختلفاً** (من الـ client `cashflow-api`): مثلاً `tenant_admin`, `owner`, `finance_manager`, `accountant_readonly`, أو أحد الأدوار الجديدة مثل `board_member`, `ap_manager`.
+6. بعد تسجيل الدخول:
+   - **الإعدادات** (`/app/settings`) و **سجل التدقيق** (`/app/audit`) يظهران فقط لـ `tenant_admin` و `owner` (إن رُفضت يُحوّلك للـ dashboard).
+   - صفحة **الأدوار** (`/app/settings/roles`) تعرض الصلاحيات المحلولة لكل دور حسب مصفوفة الـ RBAC.
+
+إذا لم يكن عندك مستخدمين في Keycloak، أنشئهم من لوحة Keycloak: http://localhost:8180 (admin / admin) → Realm `cashflow` → Users → Add user، ثم في تبويب Role mapping اختر Client roles `cashflow-api` وأضف الدور المطلوب.
+
+### 2. تجربة من الـ API (Backend)
+
+1. شغّل البنية التحتية والـ tenant-service: `make up-deps` ثم `make run`.
+2. احصل على توكن:
+   ```bash
+   TOKEN=$(make keycloak-token)
+   ```
+   (هذا يستخدم المستخدم الافتراضي `admin@demo.com` إن وُجد في الـ realm.)
+3. استدعِ مسارات محمية بصلاحيات:
+   ```bash
+   # قراءة الملف الشخصي (أي مستخدم مصادق)
+   curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/me | jq
+
+   # إنشاء tenant (يحتاج tenant:create — مثلاً tenant_admin أو owner)
+   curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"name":"Test Org","slug":"test-org"}' http://localhost:8080/tenants | jq
+
+   # سجل التدقيق (يحتاج audit:read + X-Tenant-ID)
+   curl -s -H "Authorization: Bearer $TOKEN" -H "X-Tenant-ID: <tenant-uuid>" \
+     http://localhost:8080/audit-logs | jq
+   ```
+4. لمقارنة الأدوار: أنشئ في Keycloak مستخدمين بدوار مختلفة، احصل لكل واحد على توكن (بـ username/password عبر `/protocol/openid-connect/token`) ثم أعد الاستدعاءات أعلاه — المسارات المحمية بصلاحية سترجع `403 Forbidden` إن لم يكن للدور الصلاحية المطلوبة.
+
+### 3. أمثلة cURL: توكن + معاملات (Ingestion)
+
+- **توكن:** يُستخرج من **Keycloak** على المنفذ **8180** (وليس 8080). استخدم `make keycloak-token` أو:
+
+  ```bash
+  TOKEN=$(curl -s -X POST "http://localhost:8180/realms/cashflow/protocol/openid-connect/token" \
+    -d "client_id=cashflow-api" \
+    -d "client_secret=cashflow-api-secret" \
+    -d "username=admin@demo.com" \
+    -d "password=admin123" \
+    -d "grant_type=password" | jq -r '.access_token')
+  ```
+
+- **قائمة المعاملات (Ingestion على 8081):** تحتاج `tenant_id` (UUID). مستخدمو الـ realm الافتراضي لهم `tenant_id` في الـ claim = `00000000-0000-0000-0000-000000000001`؛ أو أنشئ tenant من الـ tenant-service ثم استخدم الـ ID المُرجَع.
+
+  ```bash
+  TENANT_ID="00000000-0000-0000-0000-000000000001"
+
+  curl -s -H "Authorization: Bearer $TOKEN" \
+    "http://localhost:8081/tenants/${TENANT_ID}/transactions?limit=20" | jq '.data[] | {date, description, amount}'
+  ```
+
+  (الاستجابة من الـ API بصيغة `{ "data": [ ... ], "meta": { ... } }` لذلك استخدم `.data[]` في jq.)
+
+- **استيراد CSV بنكي (Ingestion على 8081):** تحتاج `tenant_id` و `account_id` (UUID لحساب بنكي). أنشئ حساباً من `POST /tenants/{tenantId}/bank-accounts` إن لم يكن لديك، ثم:
+
+  ```bash
+  TENANT_ID="00000000-0000-0000-0000-000000000001"
+  ACCOUNT_ID="<uuid-from-bank-accounts>"
+
+  curl -X POST "http://localhost:8081/tenants/${TENANT_ID}/imports/bank-csv" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "file=@/path/to/your.csv" \
+    -F "account_id=${ACCOUNT_ID}"
+  ```

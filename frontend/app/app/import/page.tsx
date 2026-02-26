@@ -11,16 +11,17 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/context";
 import { useToast } from "@/components/ui/toast";
-import { cn, formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { useCSVImport } from "@/features/import/use-csv-import";
 import type { ImportRow } from "@/features/import/use-csv-import";
 
 // ── Review Table (State 4) ────────────────────────────────────────────────────
 
-function ReviewTable({ rows, locale, isAr, dir }: {
+function ReviewTable({ rows, fmt, isAr, dir }: {
   rows: ImportRow[];
-  locale: string;
+  fmt: (n: number) => string;
   isAr: boolean;
   dir: "ltr" | "rtl";
 }) {
@@ -69,7 +70,7 @@ function ReviewTable({ rows, locale, isAr, dir }: {
               </td>
               <td className="px-3 py-2.5 text-end">
                 <span className={cn("tabular-nums text-sm font-semibold whitespace-nowrap", row.amount >= 0 ? "text-emerald-600" : "text-rose-600")}>
-                  {row.amount >= 0 ? "+" : ""}{formatCurrency(Math.abs(row.amount), row.currency, locale)}
+                  {row.amount >= 0 ? "+" : ""}{fmt(row.amount)}
                 </span>
               </td>
             </tr>
@@ -85,6 +86,7 @@ function ReviewTable({ rows, locale, isAr, dir }: {
 export default function ImportPage() {
   const { locale, dir } = useI18n();
   const { toast } = useToast();
+  const { fmt } = useCurrency();
   const router = useRouter();
   const isAr = locale === "ar";
 
@@ -226,7 +228,7 @@ export default function ImportPage() {
                 </Badge>
               </div>
 
-              <ReviewTable rows={rows} locale={locale} isAr={isAr} dir={dir as "ltr" | "rtl"} />
+              <ReviewTable rows={rows} fmt={fmt} isAr={isAr} dir={dir as "ltr" | "rtl"} />
 
               <div className="bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 text-xs p-3 rounded-md flex items-start gap-2 border border-blue-100 dark:border-blue-900/50">
                 <Sparkles className="w-3.5 h-3.5 mt-0.5 shrink-0" />

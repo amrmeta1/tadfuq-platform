@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/context";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { ExposureChart, type CurrencySlice } from "@/components/fx-radar/ExposureChart";
 import type { ChartConfig } from "@/components/ui/chart";
 
@@ -37,7 +38,7 @@ interface FXPayable {
   dueIn: string;
   dueIn_ar: string;
   foreignAmount: string;
-  baseAmount: string;
+  baseAmount: number; // SAR
   risk: "high" | "safe" | "monitor";
 }
 
@@ -49,7 +50,7 @@ const FX_PAYABLES: FXPayable[] = [
     dueIn: "In 12 Days",
     dueIn_ar: "خلال ١٢ يومًا",
     foreignAmount: "€95,000",
-    baseAmount: "SAR 399,000",
+    baseAmount: 399_000,
     risk: "high",
   },
   {
@@ -59,7 +60,7 @@ const FX_PAYABLES: FXPayable[] = [
     dueIn: "In 25 Days",
     dueIn_ar: "خلال ٢٥ يومًا",
     foreignAmount: "$110,000",
-    baseAmount: "SAR 412,500",
+    baseAmount: 412_500,
     risk: "safe",
   },
   {
@@ -69,7 +70,7 @@ const FX_PAYABLES: FXPayable[] = [
     dueIn: "In 5 Days",
     dueIn_ar: "خلال ٥ أيام",
     foreignAmount: "£25,000",
-    baseAmount: "SAR 119,500",
+    baseAmount: 119_500,
     risk: "monitor",
   },
 ];
@@ -100,6 +101,7 @@ function RiskBadge({ risk, isAr }: { risk: FXPayable["risk"]; isAr: boolean }) {
 
 export default function FXRadarPage() {
   const { locale, dir } = useI18n();
+  const { fmt } = useCurrency();
   const isAr = locale === "ar";
 
   return (
@@ -127,12 +129,12 @@ export default function FXRadarPage() {
             {isAr ? (
               <>
                 <span className="font-semibold">تنبيه مستشار AI:</span> سعر صرف EUR/SAR في ارتفاع (+١.٤٪ هذا الأسبوع). نوصي بشدة بتسوية فاتورة €٩٥,٠٠٠ لـ «Siemens AG» اليوم لتجنب{" "}
-                <span className="font-bold">خسارة صرف أجنبي متوقعة بقيمة SAR 5,400</span>.
+                <span className="font-bold">{fmt(5400)}</span>.
               </>
             ) : (
               <>
                 <span className="font-semibold">Mustashar AI Alert:</span> The EUR/SAR exchange rate is trending UP (+1.4% this week). We strongly recommend settling the €95,000 invoice to &apos;Siemens AG&apos; today to avoid a projected{" "}
-                <span className="font-bold">SAR 5,400 FX loss</span>.
+                <span className="font-bold">{fmt(5400)} FX loss</span>.
               </>
             )}
           </p>
@@ -159,7 +161,7 @@ export default function FXRadarPage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold tabular-nums tracking-tighter">
-                SAR 1,420,000
+                {fmt(1_420_000)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "USD · EUR · GBP" : "USD · EUR · GBP"}
@@ -177,7 +179,7 @@ export default function FXRadarPage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold tabular-nums tracking-tighter text-destructive">
-                SAR 12,400
+                {fmt(12_400)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "الحد الأقصى للخسارة المقدرة" : "Estimated max loss"}
@@ -195,7 +197,7 @@ export default function FXRadarPage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold tabular-nums tracking-tighter text-muted-foreground">
-                SAR 0.00
+                {fmt(0)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "٠٪ من التعرض محمي" : "0% exposure protected"}
@@ -218,7 +220,7 @@ export default function FXRadarPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <ExposureChart data={CHART_DATA} config={CHART_CONFIG} isAr={isAr} />
+              <ExposureChart data={CHART_DATA} config={CHART_CONFIG} isAr={isAr} fmt={fmt} />
             </CardContent>
           </Card>
 
@@ -263,7 +265,7 @@ export default function FXRadarPage() {
                         {row.foreignAmount}
                       </TableCell>
                       <TableCell className="tabular-nums font-mono text-end text-muted-foreground">
-                        {row.baseAmount}
+                        {fmt(row.baseAmount)}
                       </TableCell>
                       <TableCell className="text-end pe-4">
                         <RiskBadge risk={row.risk} isAr={isAr} />

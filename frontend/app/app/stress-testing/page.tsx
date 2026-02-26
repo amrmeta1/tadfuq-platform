@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Fan Chart Data (12 months) ─────────────────────────────────────────────────
@@ -57,25 +57,21 @@ interface StressScenario {
   probabilityAr: string;
   impact: string;
   impactAr: string;
-  cash12m: string;
+  cash12m: number;
   status: "safe" | "tight" | "critical";
 }
 
 const SCENARIOS: StressScenario[] = [
-  { nameEn: "Base Case", nameAr: "الحالة الأساسية", probability: "45%", probabilityAr: "٤٥٪", impact: "—", impactAr: "—", cash12m: "5.2M", status: "safe" },
-  { nameEn: "Mild Recession", nameAr: "ركود طفيف", probability: "25%", probabilityAr: "٢٥٪", impact: "Revenue -10%", impactAr: "إيرادات -١٠٪", cash12m: "4.1M", status: "safe" },
-  { nameEn: "Severe Recession", nameAr: "ركود حاد", probability: "10%", probabilityAr: "١٠٪", impact: "Revenue -25%", impactAr: "إيرادات -٢٥٪", cash12m: "3.2M", status: "tight" },
-  { nameEn: "Client Loss + Delayed Collections", nameAr: "خسارة عميل + تأخر تحصيل", probability: "8%", probabilityAr: "٨٪", impact: "Rev -30%, DSO +20d", impactAr: "إيرادات -٣٠٪، تحصيل +٢٠ يوم", cash12m: "2.8M", status: "tight" },
-  { nameEn: "Perfect Storm", nameAr: "العاصفة المثالية", probability: "2%", probabilityAr: "٢٪", impact: "Rev -40%, Costs +15%, DSO +30d", impactAr: "إيرادات -٤٠٪، تكاليف +١٥٪، تحصيل +٣٠ يوم", cash12m: "1.5M", status: "critical" },
+  { nameEn: "Base Case", nameAr: "الحالة الأساسية", probability: "45%", probabilityAr: "٤٥٪", impact: "—", impactAr: "—", cash12m: 5_200_000, status: "safe" },
+  { nameEn: "Mild Recession", nameAr: "ركود طفيف", probability: "25%", probabilityAr: "٢٥٪", impact: "Revenue -10%", impactAr: "إيرادات -١٠٪", cash12m: 4_100_000, status: "safe" },
+  { nameEn: "Severe Recession", nameAr: "ركود حاد", probability: "10%", probabilityAr: "١٠٪", impact: "Revenue -25%", impactAr: "إيرادات -٢٥٪", cash12m: 3_200_000, status: "tight" },
+  { nameEn: "Client Loss + Delayed Collections", nameAr: "خسارة عميل + تأخر تحصيل", probability: "8%", probabilityAr: "٨٪", impact: "Rev -30%, DSO +20d", impactAr: "إيرادات -٣٠٪، تحصيل +٢٠ يوم", cash12m: 2_800_000, status: "tight" },
+  { nameEn: "Perfect Storm", nameAr: "العاصفة المثالية", probability: "2%", probabilityAr: "٢٪", impact: "Rev -40%, Costs +15%, DSO +30d", impactAr: "إيرادات -٤٠٪، تكاليف +١٥٪، تحصيل +٣٠ يوم", cash12m: 1_500_000, status: "critical" },
 ];
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function fmtAxis(n: number) {
-  return `${(n / 1000).toFixed(0)}K`;
-}
-
-function FanTooltip({ active, payload, label, curr }: any) {
+function FanTooltip({ active, payload, label, fmt }: { active?: boolean; payload?: any[]; label?: string; fmt: (n: number) => string }) {
   if (!active || !payload?.length) return null;
   const data = payload[0]?.payload;
   if (!data) return null;
@@ -84,10 +80,10 @@ function FanTooltip({ active, payload, label, curr }: any) {
       <p className="font-semibold">{label}</p>
       <p className="tabular-nums">
         <span className="text-muted-foreground">Median:</span>{" "}
-        <span className="font-medium text-indigo-600 dark:text-indigo-400">{curr} {(data.median * 1000).toLocaleString()}</span>
+        <span className="font-medium text-indigo-600 dark:text-indigo-400">{fmt(data.median * 1000)}</span>
       </p>
       <p className="tabular-nums text-muted-foreground">
-        P5–P95: {curr} {(data.p5 * 1000).toLocaleString()} – {(data.p95 * 1000).toLocaleString()}
+        P5–P95: {fmt(data.p5 * 1000)} – {fmt(data.p95 * 1000)}
       </p>
     </div>
   );
@@ -98,8 +94,7 @@ function FanTooltip({ active, payload, label, curr }: any) {
 export default function StressTestingPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
-  const { profile } = useCompany();
-  const curr = profile.currency ?? "SAR";
+  const { fmt, fmtAxis, selected: currCode } = useCurrency();
 
   const [simCount, setSimCount] = useState(1000);
   const [horizon, setHorizon] = useState(12);
@@ -251,9 +246,9 @@ export default function StressTestingPage() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 {isAr ? "النقد المتوقع عند ١٢ شهر" : "Expected Cash at 12m"}
               </p>
-              <p className="text-2xl font-bold tabular-nums">{curr} 5.2M</p>
+              <p className="text-2xl font-bold tabular-nums">{fmt(5_200_000)}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {isAr ? "النطاق: ٢.٨م – ٧.٦م" : "Range: 2.8M – 7.6M"}
+                {isAr ? `النطاق: ${fmtAxis(2_800_000)} – ${fmtAxis(7_600_000)}` : `Range: ${fmtAxis(2_800_000)} – ${fmtAxis(7_600_000)}`}
               </p>
             </CardContent>
           </Card>
@@ -263,7 +258,7 @@ export default function StressTestingPage() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 {isAr ? "أسوأ حالة (المئين الخامس)" : "Worst Case (5th Percentile)"}
               </p>
-              <p className="text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{curr} 2.8M</p>
+              <p className="text-2xl font-bold tabular-nums text-amber-600 dark:text-amber-400">{fmt(2_800_000)}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "الحد الأدنى المتوقع" : "Floor estimate"}
               </p>
@@ -275,7 +270,7 @@ export default function StressTestingPage() {
               <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
                 {isAr ? "أفضل حالة (المئين ٩٥)" : "Best Case (95th Percentile)"}
               </p>
-              <p className="text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400">{curr} 7.6M</p>
+              <p className="text-2xl font-bold tabular-nums text-blue-600 dark:text-blue-400">{fmt(7_600_000)}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {isAr ? "السقف المتوقع" : "Ceiling estimate"}
               </p>
@@ -336,10 +331,10 @@ export default function StressTestingPage() {
                     axisLine={false}
                     tickLine={false}
                     width={50}
-                    tickFormatter={fmtAxis}
+                    tickFormatter={(v) => fmtAxis(v * 1000)}
                     domain={[2000, 8000]}
                   />
-                  <Tooltip content={<FanTooltip curr={curr} />} />
+                  <Tooltip content={<FanTooltip fmt={fmt} />} key={currCode} />
 
                   {/* Outermost band: P5-P95 */}
                   <Area type="monotone" dataKey="p5" stackId="outer" stroke="none" fill="transparent" />
@@ -404,7 +399,7 @@ export default function StressTestingPage() {
                       <td className="py-2.5 px-3 font-medium">{isAr ? s.nameAr : s.nameEn}</td>
                       <td className="py-2.5 px-3 text-center tabular-nums">{isAr ? s.probabilityAr : s.probability}</td>
                       <td className="py-2.5 px-3 text-center text-muted-foreground text-xs">{isAr ? s.impactAr : s.impact}</td>
-                      <td className="py-2.5 px-3 text-center tabular-nums font-semibold">{curr} {s.cash12m}</td>
+                      <td className="py-2.5 px-3 text-center tabular-nums font-semibold">{fmt(s.cash12m)}</td>
                       <td className="py-2.5 px-3 text-center">
                         {s.status === "safe" && (
                           <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 gap-1">

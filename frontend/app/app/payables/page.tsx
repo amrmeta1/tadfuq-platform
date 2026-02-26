@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -19,19 +20,14 @@ interface Invoice {
   priority: "urgent" | "delay" | "discount";
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function fmt(n: number, curr: string): string {
-  return `${n.toLocaleString("en-US")} ${curr}`;
-}
-
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function PayablesPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
   const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  void profile;
+  const { fmt, selected: currCode } = useCurrency();
   const [selectedId, setSelectedId] = useState<string>("1");
 
   const INVOICES: Invoice[] = [
@@ -77,7 +73,7 @@ export default function PayablesPage() {
                 {isAr ? "إجمالي المستحق" : "Total Due"}
               </p>
               <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>
-                {fmt(1_240_500, curr)}
+                {fmt(1_240_500)}
               </p>
               <div className="text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">
                 ↘ {isAr ? "مستحق الدفع" : "Due"}
@@ -88,7 +84,7 @@ export default function PayablesPage() {
                 {isAr ? "مستحق هذا الأسبوع" : "Due This Week"}
               </p>
               <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>
-                {fmt(320_000, curr)}
+                {fmt(320_000)}
               </p>
               <div className="text-rose-500 bg-rose-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">
                 ↗ {isAr ? "هذا الأسبوع" : "This Week"}
@@ -99,7 +95,7 @@ export default function PayablesPage() {
                 {isAr ? "وفر محتمل (خصم مبكر)" : "Potential Savings (Early Discount)"}
               </p>
               <p className="text-lg font-bold tabular-nums text-foreground" suppressHydrationWarning>
-                {fmt(12_500, curr)}
+                {fmt(12_500)}
               </p>
               <div className="text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md text-xs font-medium w-fit mt-1.5 flex items-center gap-1">
                 ↗ {isAr ? "وفر محتمل" : "Potential Savings"}
@@ -160,7 +156,7 @@ export default function PayablesPage() {
 
                   {/* Left side (RTL end) */}
                   <p className="text-sm font-bold tabular-nums shrink-0" suppressHydrationWarning>
-                    {fmt(inv.amount, curr)}
+                    {fmt(inv.amount)}
                   </p>
                 </div>
               );
@@ -180,8 +176,7 @@ export default function PayablesPage() {
             {isAr ? "فاتورة" : "Invoice"} #{selected.invoice} / {selected.vendor}
           </p>
           <p className="text-3xl font-bold tabular-nums mt-2" suppressHydrationWarning>
-            {selected.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}{" "}
-            <span className="text-xl font-semibold text-muted-foreground">{curr}</span>
+            {fmt(selected.amount)}
           </p>
 
           <div className="flex items-center gap-2 mt-3 flex-wrap">
@@ -212,7 +207,7 @@ export default function PayablesPage() {
             </div>
             <div>
               <p className="font-medium text-foreground">{isAr ? "العملة" : "Currency"}</p>
-              <p suppressHydrationWarning>{curr}</p>
+              <p suppressHydrationWarning>{currCode}</p>
             </div>
           </div>
         </Card>
@@ -245,8 +240,8 @@ export default function PayablesPage() {
               <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
               <p className="text-xs text-destructive leading-relaxed">
                 {isAr
-                  ? `تحذير: السداد الفوري سيخفض الرصيد إلى ما دون الحد الأدنى المطلوب (50,000 ${curr}).`
-                  : `Warning: Immediate payment will reduce the balance below the required minimum (50,000 ${curr}).`
+                  ? `تحذير: السداد الفوري سيخفض الرصيد إلى ما دون الحد الأدنى المطلوب (${fmt(50_000)}).`
+                  : `Warning: Immediate payment will reduce the balance below the required minimum (${fmt(50_000)}).`
                 }
               </p>
             </div>

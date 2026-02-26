@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
 import { useToast } from "@/components/ui/toast";
-import { formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { useTransactions, useUpdateTransaction, useBulkRecategorize, useDeleteTransaction } from "@/features/transactions/hooks";
 import { buildTransactionColumns } from "@/features/transactions/columns";
@@ -19,6 +19,7 @@ import type { Transaction, TransactionFilters, UpdateTransactionPayload, Categor
 
 export default function TransactionsPage() {
   const { locale, dir } = useI18n();
+  const { fmt } = useCurrency();
   const { currentTenant } = useTenant();
   const { toast } = useToast();
   const isAr = locale === "ar";
@@ -164,7 +165,7 @@ export default function TransactionsPage() {
                 <p className="text-xs text-muted-foreground">{kpi.label}</p>
                 <p className={cn("text-base font-semibold tabular-nums", kpi.color)}>
                   {net < 0 && kpi.label.includes("Net") ? "-" : ""}
-                  {formatCurrency(Math.abs(kpi.value), "SAR", locale)}
+                  {fmt(Math.abs(kpi.value))}
                 </p>
               </div>
             </div>

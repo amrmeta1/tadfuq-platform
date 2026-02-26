@@ -26,7 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 const HEALTH_SCORE = 82;
@@ -78,8 +78,7 @@ const timelineDotColor: Record<TimelineEvent["type"], string> = {
 
 export default function DailyBriefPage() {
   const { locale, dir } = useI18n();
-  const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  const { fmt } = useCurrency();
   const isAr = locale === "ar";
   const hc = healthColor(HEALTH_SCORE);
 
@@ -145,25 +144,25 @@ export default function DailyBriefPage() {
                 <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40">
                   <ArrowUpRight className="h-3 w-3 text-emerald-600" />
                 </span>
-                <span>{isAr ? "تم استلام ٦٧,٠٠٠ ر.س من العميل ب — قبل يومين من الموعد" : `${curr} 67,000 received from Client B — 2 days early`}</span>
+                <span>{isAr ? "تم استلام ٦٧,٠٠٠ ر.س من العميل ب — قبل يومين من الموعد" : `${fmt(67_000)} received from Client B — 2 days early`}</span>
               </li>
               <li className="flex items-start gap-2.5 text-sm">
                 <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
                   <CircleDot className="h-3 w-3 text-zinc-500" />
                 </span>
-                <span>{isAr ? "تم تنفيذ الخصم التلقائي لأوريدو ٣,٢٠٠ ر.س" : `Ooredoo auto-debit ${curr} 3,200 processed`}</span>
+                <span>{isAr ? "تم تنفيذ الخصم التلقائي لأوريدو ٣,٢٠٠ ر.س" : `Ooredoo auto-debit ${fmt(3_200)} processed`}</span>
               </li>
               <li className="flex items-start gap-2.5 text-sm">
                 <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
                   <AlertTriangle className="h-3 w-3 text-amber-600" />
                 </span>
-                <span>{isAr ? "الفاتورة #INV-2847 من المورد X متأخرة ٧ أيام — ٢٨,٠٠٠ ر.س" : `Invoice #INV-2847 from Supplier X is now 7 days overdue — ${curr} 28,000`}</span>
+                <span>{isAr ? "الفاتورة #INV-2847 من المورد X متأخرة ٧ أيام — ٢٨,٠٠٠ ر.س" : `Invoice #INV-2847 from Supplier X is now 7 days overdue — ${fmt(28_000)}`}</span>
               </li>
               <li className="flex items-start gap-2.5 text-sm font-medium">
                 <span className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/40">
                   <Banknote className="h-3 w-3 text-indigo-600" />
                 </span>
-                <span>{isAr ? "أُغلق الرصيد النقدي عند ١,٢٤٥,٠٠٠ ر.س (+٦٣,٨٠٠ ر.س مقارنة بالأمس)" : `Cash balance closed at ${curr} 1,245,000 (+${curr} 63,800 vs yesterday)`}</span>
+                <span>{isAr ? "أُغلق الرصيد النقدي عند ١,٢٤٥,٠٠٠ ر.س (+٦٣,٨٠٠ ر.س مقارنة بالأمس)" : `Cash balance closed at ${fmt(1_245_000)} (+${fmt(63_800)} vs yesterday)`}</span>
               </li>
             </ul>
             <div className="rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 px-4 py-3 flex items-start gap-2.5">
@@ -201,7 +200,7 @@ export default function DailyBriefPage() {
                   {isAr ? "التدفقات المتوقعة" : "Expected Inflows"}
                 </p>
                 <p className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                  {curr} {expectedInflow.toLocaleString()}
+                  {fmt(expectedInflow)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isAr ? "إيرادات خدمات — ثقة ٨٥٪" : "Service Revenue — 85% confidence"}
@@ -212,7 +211,7 @@ export default function DailyBriefPage() {
                   {isAr ? "المصروفات المتوقعة" : "Expected Outflows"}
                 </p>
                 <p className="text-lg font-bold tabular-nums text-zinc-600 dark:text-zinc-400">
-                  {curr} 0
+                  {fmt(0)}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isAr ? "لا توجد مدفوعات مجدولة" : "No scheduled payments"}
@@ -225,7 +224,7 @@ export default function DailyBriefPage() {
                 <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
                   {isAr ? "الرصيد المتوقع نهاية اليوم" : "Predicted End-of-Day Balance"}
                 </p>
-                <p className="text-lg font-bold tabular-nums">{curr} 1,268,000</p>
+                <p className="text-lg font-bold tabular-nums">{fmt(1_268_000)}</p>
               </div>
               <ArrowUpRight className="h-5 w-5 text-emerald-500" />
             </div>
@@ -235,7 +234,7 @@ export default function DailyBriefPage() {
               <span className="text-muted-foreground">
                 {isAr
                   ? "الرواتب خلال ٣ أيام (٨٩,٠٠٠ ر.س) — الأموال كافية"
-                  : `Payroll in 3 days (${curr} 89,000) — funds are sufficient`}
+                  : `Payroll in 3 days (${fmt(89_000)}) — funds are sufficient`}
               </span>
               <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
             </div>
@@ -254,7 +253,7 @@ export default function DailyBriefPage() {
                       style={{ width: `${(expectedInflow / maxBar) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs tabular-nums font-medium w-16 text-end">{expectedInflow.toLocaleString()}</span>
+                  <span className="text-xs tabular-nums font-medium w-16 text-end">{fmt(expectedInflow)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground w-12 shrink-0">{isAr ? "خارج" : "Out"}</span>
@@ -264,7 +263,7 @@ export default function DailyBriefPage() {
                       style={{ width: `${(expectedOutflow / maxBar) * 100}%` }}
                     />
                   </div>
-                  <span className="text-xs tabular-nums font-medium w-16 text-end">{expectedOutflow.toLocaleString()}</span>
+                  <span className="text-xs tabular-nums font-medium w-16 text-end">{fmt(expectedOutflow)}</span>
                 </div>
               </div>
             </div>
@@ -298,7 +297,7 @@ export default function DailyBriefPage() {
                 <p className="text-sm leading-snug">
                   {isAr
                     ? "متابعة الفاتورة المتأخرة #INV-2847 (٢٨,٠٠٠ ر.س). إرسال تذكير واتساب عبر CashCollect."
-                    : `Follow up on overdue invoice #INV-2847 (${curr} 28,000). Send WhatsApp reminder via CashCollect.`}
+                    : `Follow up on overdue invoice #INV-2847 (${fmt(28_000)}). Send WhatsApp reminder via CashCollect.`}
                 </p>
               </div>
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400">
@@ -315,7 +314,7 @@ export default function DailyBriefPage() {
                 <p className="text-sm leading-snug">
                   {isAr
                     ? "فكّر في تحويل ٢٠٠,٠٠٠ ر.س إلى وديعة عالية العائد. حساب التوفير الحالي يحقق عائداً أقل من السوق."
-                    : `Consider moving ${curr} 200,000 to high-yield deposit. Current savings account earning below market rate.`}
+                    : `Consider moving ${fmt(200_000)} to high-yield deposit. Current savings account earning below market rate.`}
                 </p>
               </div>
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400">
@@ -349,7 +348,7 @@ export default function DailyBriefPage() {
               <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-1">
                 {isAr ? "الرصيد النقدي" : "Cash Position"}
               </p>
-              <p className="text-lg font-bold tabular-nums">{curr} {QUICK_STATS.cashPosition.toLocaleString()}</p>
+              <p className="text-lg font-bold tabular-nums">{fmt(QUICK_STATS.cashPosition)}</p>
             </CardContent>
           </Card>
           <Card className="shadow-sm border-border/50">
@@ -358,7 +357,7 @@ export default function DailyBriefPage() {
                 {isAr ? "صافي التدفق ٧ أيام" : "7-Day Net Flow"}
               </p>
               <p className="text-lg font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                +{curr} {QUICK_STATS.netFlow7d.toLocaleString()}
+                +{fmt(QUICK_STATS.netFlow7d)}
               </p>
             </CardContent>
           </Card>
@@ -368,7 +367,7 @@ export default function DailyBriefPage() {
                 {isAr ? "مستحقات متأخرة" : "Overdue Receivables"}
               </p>
               <p className="text-lg font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                {curr} {QUICK_STATS.overdueReceivables.toLocaleString()}
+                {fmt(QUICK_STATS.overdueReceivables)}
               </p>
             </CardContent>
           </Card>

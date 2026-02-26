@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import {
   BarChart,
@@ -72,11 +73,6 @@ function getChartData(isAr: boolean) {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
-function fmtAmount(n: number, curr: string): string {
-  if (n === 0) return "—";
-  return `${n.toLocaleString("en-US")} ${curr}`;
-}
-
 function statusBadge(status: FilingRow["status"], isAr: boolean) {
   const map = {
     filed: {
@@ -98,7 +94,7 @@ function statusBadge(status: FilingRow["status"], isAr: boolean) {
 
 // ── Custom Chart Tooltip ────────────────────────────────────────────────────────
 
-function VatTooltip({ active, payload, label, currency, isAr }: any) {
+function VatTooltip({ active, payload, label, fmt, isAr }: { active?: boolean; payload?: any[]; label?: string; fmt: (n: number) => string; isAr: boolean }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-popover border border-border shadow-sm rounded-lg p-3 text-xs min-w-[180px]">
@@ -114,7 +110,7 @@ function VatTooltip({ active, payload, label, currency, isAr }: any) {
               {labels[entry.dataKey] || entry.dataKey}
             </span>
             <span className="font-mono tabular-nums" suppressHydrationWarning>
-              {entry.value.toLocaleString("en-US")} {currency}
+              {fmt(entry.value)}
             </span>
           </div>
         );
@@ -129,7 +125,7 @@ export default function ZakatVatPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
   const { profile } = useCompany();
-  const curr = profile.currency || "SAR";
+  const { fmt } = useCurrency();
 
   const { days, hours, percent } = getCountdown();
   const chartData = getChartData(isAr);
@@ -221,7 +217,7 @@ export default function ZakatVatPage() {
         {[
           {
             label: isAr ? "التزام ضريبة القيمة المضافة" : "VAT Liability",
-            value: "18,500",
+            value: 18_500,
             sub: isAr ? "محصّلة − مدفوعة" : "Collected − Paid",
             color: "text-amber-600 dark:text-amber-400",
             dot: "bg-amber-500",
@@ -230,7 +226,7 @@ export default function ZakatVatPage() {
           },
           {
             label: isAr ? "مخصص الزكاة" : "Zakat Provision",
-            value: "42,000",
+            value: 42_000,
             sub: isAr ? "تقدير سنوي" : "Annual Estimate",
             color: "text-emerald-600 dark:text-emerald-400",
             dot: "bg-emerald-500",
@@ -239,7 +235,7 @@ export default function ZakatVatPage() {
           },
           {
             label: isAr ? "استرداد معلّق" : "Refund Pending",
-            value: "3,200",
+            value: 3_200,
             sub: isAr ? "طلب مقدم" : "Claim Submitted",
             color: "text-blue-600 dark:text-blue-400",
             dot: "bg-blue-500",
@@ -254,7 +250,7 @@ export default function ZakatVatPage() {
                 <p className="text-[11px] text-muted-foreground font-medium leading-none">{kpi.label}</p>
               </div>
               <p className="text-2xl font-bold tabular-nums tracking-tight text-foreground leading-none" suppressHydrationWarning>
-                {kpi.value} <span className="text-sm font-semibold text-muted-foreground">{curr}</span>
+                {fmt(kpi.value)}
               </p>
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-[10px] text-muted-foreground">{kpi.sub}</p>
@@ -317,7 +313,7 @@ export default function ZakatVatPage() {
                       <td className="p-2.5 text-muted-foreground">{isAr ? f.dueDateAr : f.dueDate}</td>
                       <td className="p-2.5">{statusBadge(f.status, isAr)}</td>
                       <td className="p-2.5 pe-5 text-end font-mono tabular-nums" suppressHydrationWarning>
-                        {fmtAmount(f.amount, curr)}
+                        {f.amount === 0 ? "—" : fmt(f.amount)}
                       </td>
                     </tr>
                   ))}
@@ -354,7 +350,7 @@ export default function ZakatVatPage() {
                     return String(v);
                   }}
                 />
-                <Tooltip content={<VatTooltip currency={curr} isAr={isAr} />} />
+                <Tooltip content={<VatTooltip fmt={fmt} isAr={isAr} />} />
                 <Legend
                   verticalAlign="top"
                   height={32}
@@ -398,8 +394,8 @@ export default function ZakatVatPage() {
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {isAr
-                  ? `التزام ضريبة القيمة المضافة للربع الأول هو ${fmtAmount(18_500, curr)}. تم تخصيص هذا المبلغ تلقائياً من ميزانية التشغيل. الموعد النهائي للتقديم بعد ${days} يوماً. نسبة ضريبة القيمة المضافة الفعلية لديك 14.2% — أقل من المعدل القطاعي البالغ 15%. تأكد من تسوية فواتير الموردين قبل نهاية الربع لتجنب تعديلات لاحقة.`
-                  : `Your Q1 VAT liability is ${fmtAmount(18_500, curr)}. I've automatically reserved this from your operating budget. Filing deadline is in ${days} days. Your effective VAT rate is 14.2% — below the sector average of 15%. Ensure supplier invoices are reconciled before quarter-end to avoid post-filing adjustments.`}
+                  ? `التزام ضريبة القيمة المضافة للربع الأول هو ${fmt(18_500)}. تم تخصيص هذا المبلغ تلقائياً من ميزانية التشغيل. الموعد النهائي للتقديم بعد ${days} يوماً. نسبة ضريبة القيمة المضافة الفعلية لديك 14.2% — أقل من المعدل القطاعي البالغ 15%. تأكد من تسوية فواتير الموردين قبل نهاية الربع لتجنب تعديلات لاحقة.`
+                  : `Your Q1 VAT liability is ${fmt(18_500)}. I've automatically reserved this from your operating budget. Filing deadline is in ${days} days. Your effective VAT rate is 14.2% — below the sector average of 15%. Ensure supplier invoices are reconciled before quarter-end to avoid post-filing adjustments.`}
               </p>
               <div className="flex items-center gap-2 mt-3">
                 <Button size="sm" className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-1.5">

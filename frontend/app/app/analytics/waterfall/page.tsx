@@ -19,11 +19,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { useTenant } from "@/lib/hooks/use-tenant";
-import { formatCurrency } from "@/lib/utils";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 import { useWaterfall, useMonthlyTrend } from "@/features/analytics/hooks";
 
-function ChartTooltip({ active, payload, label, locale, currency }: any) {
+function ChartTooltip({ active, payload, label, fmt }: { active?: boolean; payload?: any[]; label?: string; fmt: (n: number) => string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border bg-popover px-3 py-2 shadow-md text-xs min-w-[160px]">
@@ -32,7 +32,7 @@ function ChartTooltip({ active, payload, label, locale, currency }: any) {
         <div key={p.dataKey} className="flex justify-between gap-4 mb-0.5">
           <span className="text-muted-foreground">{p.name}</span>
           <span className={cn("font-medium tabular-nums", p.dataKey === "outflow" ? "text-rose-600" : p.dataKey === "inflow" ? "text-emerald-600" : p.value >= 0 ? "text-emerald-600" : "text-rose-600")}>
-            {p.value < 0 ? "-" : ""}{formatCurrency(Math.abs(p.value), currency, locale)}
+            {p.value < 0 ? "-" : ""}{fmt(Math.abs(p.value))}
           </span>
         </div>
       ))}
@@ -43,8 +43,8 @@ function ChartTooltip({ active, payload, label, locale, currency }: any) {
 export default function WaterfallPage() {
   const { locale, dir } = useI18n();
   const { currentTenant } = useTenant();
+  const { fmt } = useCurrency();
   const isAr = locale === "ar";
-  const currency = "SAR";
 
   const [trendMonths, setTrendMonths] = useState<6 | 12>(6);
 
@@ -88,12 +88,9 @@ export default function WaterfallPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-4 pb-4">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-sm font-normal text-muted-foreground">SAR</span>
-                  <span className={cn("text-xl font-semibold tracking-tight tabular-nums", kpi.color)}>
-                    {kpi.value < 0 ? "-" : ""}{formatCurrency(Math.abs(kpi.value), "SAR", locale).replace("SAR", "").trim()}
-                  </span>
-                </div>
+                <span className={cn("text-xl font-semibold tracking-tight tabular-nums", kpi.color)}>
+                  {kpi.value < 0 ? "-" : ""}{fmt(Math.abs(kpi.value))}
+                </span>
               </CardContent>
             </Card>
           ))}
@@ -138,7 +135,7 @@ export default function WaterfallPage() {
                     width={48}
                     tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                   />
-                  <Tooltip content={<ChartTooltip locale={locale} currency={currency} />} />
+                  <Tooltip content={<ChartTooltip fmt={fmt} />} />
                   <Legend
                     wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
                     formatter={(value) =>
@@ -213,7 +210,7 @@ export default function WaterfallPage() {
                     width={48}
                     tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)}
                   />
-                  <Tooltip content={<ChartTooltip locale={locale} currency={currency} />} />
+                  <Tooltip content={<ChartTooltip fmt={fmt} />} />
                   <Legend
                     wrapperStyle={{ fontSize: 11 }}
                     formatter={(value) =>

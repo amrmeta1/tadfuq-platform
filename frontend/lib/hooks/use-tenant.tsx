@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { setTenantId } from "@/lib/api/client";
+import { TENANT_IDS } from "@/lib/tenant-constants";
+import { DEMO_TENANT } from "@/lib/api/mock-data";
 import type { Tenant, Membership } from "@/lib/api/types";
 
 interface TenantContextValue {
@@ -30,6 +32,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setTenantId(tenant.id);
       if (typeof window !== "undefined") {
         localStorage.setItem("currentTenantId", tenant.id);
+        document.cookie = `${TENANT_IDS.cookie}=${tenant.id}; path=/; max-age=31536000; samesite=lax`;
       }
       queryClient.invalidateQueries();
     },
@@ -46,9 +49,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       if (found?.tenant) {
         setCurrentTenantState(found.tenant);
         setTenantId(found.tenant.id);
+        return;
       }
     }
-  }, [memberships]);
+    // Development fallback: if no memberships (or no match) and we have no tenant, use demo so pages render
+    if (
+      typeof window !== "undefined" &&
+      process.env.NODE_ENV !== "production" &&
+      memberships.length === 0 &&
+      currentTenant === null
+    ) {
+      setCurrentTenantState(DEMO_TENANT);
+      setTenantId(DEMO_TENANT.id);
+    }
+  }, [memberships, currentTenant]);
 
   return (
     <TenantContext.Provider

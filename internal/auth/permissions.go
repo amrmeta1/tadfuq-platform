@@ -24,6 +24,26 @@ const (
 	PermIngestionSync     Permission = "ingestion:sync"
 	PermBankAccountCreate Permission = "bank_account:create"
 	PermBankAccountRead   Permission = "bank_account:read"
+
+	// Enterprise: Treasury + cash positioning
+	PermTreasuryRead  Permission = "treasury:read"
+	PermTreasuryWrite Permission = "treasury:write"
+	// Enterprise: FX exposure / hedging
+	PermFXRead  Permission = "fx:read"
+	PermFXWrite Permission = "fx:write"
+	// Enterprise: Forecasts / scenario
+	PermForecastRead  Permission = "forecast:read"
+	PermForecastWrite Permission = "forecast:write"
+	// Enterprise: AP workflows
+	PermPayablesRead  Permission = "payables:read"
+	PermPayablesWrite Permission = "payables:write"
+	// Enterprise: AR / collections
+	PermReceivablesRead  Permission = "receivables:read"
+	PermReceivablesWrite Permission = "receivables:write"
+	// Enterprise: Audit log export (auditor)
+	PermAuditExport Permission = "audit:export"
+	// Enterprise: Executive summary only (board)
+	PermReportExecutive Permission = "report:executive"
 )
 
 // RolePermissions maps Keycloak client roles to the set of permissions they grant.
@@ -84,6 +104,90 @@ var RolePermissions = map[string][]Permission{
 		PermUserReadSelf,
 		PermIngestionRead,
 		PermBankAccountRead,
+	},
+	// Enterprise roles (8)
+	"group_cfo": {
+		PermTenantCreate,
+		PermTenantRead,
+		PermTenantUpdate,
+		PermTenantDelete,
+		PermMemberAdd,
+		PermMemberRead,
+		PermMemberRemove,
+		PermMemberRoleChange,
+		PermRoleCreate,
+		PermRoleRead,
+		PermRoleUpdate,
+		PermAuditRead,
+		PermUserReadSelf,
+		PermIngestionImport,
+		PermIngestionRead,
+		PermIngestionSync,
+		PermBankAccountCreate,
+		PermBankAccountRead,
+		PermTreasuryRead,
+		PermTreasuryWrite,
+		PermFXRead,
+		PermFXWrite,
+		PermForecastRead,
+		PermForecastWrite,
+		PermPayablesRead,
+		PermPayablesWrite,
+		PermReceivablesRead,
+		PermReceivablesWrite,
+		PermAuditExport,
+		PermReportExecutive,
+	},
+	"treasury_director": {
+		PermTenantRead,
+		PermMemberRead,
+		PermRoleRead,
+		PermUserReadSelf,
+		PermIngestionRead,
+		PermBankAccountRead,
+		PermTreasuryRead,
+		PermTreasuryWrite,
+		PermFXRead,
+		PermFXWrite,
+		PermForecastRead,
+		PermForecastWrite,
+	},
+	"financial_controller": {
+		PermTenantRead,
+		PermMemberRead,
+		PermRoleRead,
+		PermUserReadSelf,
+		PermIngestionRead,
+		PermBankAccountRead,
+	},
+	"ap_manager": {
+		PermUserReadSelf,
+		PermPayablesRead,
+		PermPayablesWrite,
+	},
+	"ar_manager": {
+		PermUserReadSelf,
+		PermReceivablesRead,
+		PermReceivablesWrite,
+	},
+	"bank_relationship_manager": {
+		PermTenantRead,
+		PermUserReadSelf,
+		PermBankAccountRead,
+	},
+	"auditor_readonly": {
+		PermTenantRead,
+		PermMemberRead,
+		PermRoleRead,
+		PermAuditRead,
+		PermAuditExport,
+		PermUserReadSelf,
+		PermIngestionRead,
+		PermBankAccountRead,
+	},
+	"board_member": {
+		PermReportExecutive,
+		PermUserReadSelf,
 	},
 }
 

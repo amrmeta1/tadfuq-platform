@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   BarChart,
   Bar,
@@ -27,6 +28,10 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
+import { TimeRangeButtons, type TimeRangeKey } from "@/components/charts/TimeRangeButtons";
+import { RechartsTooltipGlass } from "@/components/charts/ChartTooltipGlass";
+import { ChartExportButton } from "@/components/charts/ChartExportButton";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -113,14 +118,7 @@ const PROJECTS: Project[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function fmtCurrency(n: number, symbol: string): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `${symbol} ${(abs / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${symbol} ${(abs / 1_000).toFixed(0)}K`;
-  return `${symbol} ${abs.toLocaleString("en-US")}`;
-}
-
-function fmtAxisValue(n: number): string {
+function pctOnly(n: number): string {
   if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (Math.abs(n) >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
   return String(n);
@@ -157,28 +155,32 @@ const STATUS_CONFIG: Record<
   },
 };
 
-// ── Chart tooltip ────────────────────────────────────────────────────────────
+// ── Chart tooltip (glass + premium: project name, main value, % variance, sub line) ─
 
-function ChartTooltipContent({ active, payload, label }: any) {
+function ChartTooltipContent({ active, payload, label, fmt, chartData, isAr }: any) {
   if (!active || !payload?.length) return null;
+  const idx = chartData?.findIndex((d: any) => d.shortName === label) ?? -1;
+  const row = idx >= 0 ? chartData[idx] : null;
+  const budget = row?.budget ?? 0;
+  const actual = row?.actual ?? 0;
+  const pctChange =
+    budget !== 0 && actual != null
+      ? ((actual - budget) / budget) * 100
+      : undefined;
+  const subLine = isAr
+    ? `الميزانية: ${fmt(budget)} | الفعلي: ${fmt(actual)}`
+    : `Budget: ${fmt(budget)} | Actual: ${fmt(actual)}`;
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2.5 shadow-md text-xs min-w-[160px] space-y-1">
-      <p className="font-semibold text-foreground">{label}</p>
-      {payload.map((entry: any) => (
-        <div key={entry.dataKey} className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: entry.color }}
-            />
-            {entry.name}
-          </span>
-          <span className="font-mono font-medium tabular-nums">
-            {fmtCurrency(entry.value, "SAR")}
-          </span>
-        </div>
-      ))}
-    </div>
+    <RechartsTooltipGlass
+      active={active}
+      payload={payload}
+      label={label}
+      fmt={fmt}
+      pctChange={pctChange}
+      mainValue={actual}
+      subLine={subLine}
+      isPremium
+    />
   );
 }
 
@@ -188,9 +190,12 @@ export default function ProjectCashFlowPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
   const { profile } = useCompany();
-  const currencySymbol = profile.currency || "SAR";
+  const { fmt, fmtAxis, selected: currCode } = useCurrency();
+  void profile;
 
   const [filter, setFilter] = useState<FilterMode>("active");
+  const [chartTimeRange, setChartTimeRange] = useState<TimeRangeKey>("6m");
+  const budgetChartRef = useRef<HTMLDivElement>(null);
 
   const filtered = PROJECTS.filter((p) => {
     if (filter === "active") return !p.isCompleted;
@@ -205,18 +210,28 @@ export default function ProjectCashFlowPage() {
     (p) => !p.isCompleted && (p.status === "at-risk" || p.status === "over-budget"),
   ).length;
 
-  const chartData = filtered.map((p) => ({
-    name: isAr ? p.nameAr : p.nameEn,
-    shortName:
-      (isAr ? p.nameAr : p.nameEn).length > 16
-        ? (isAr ? p.nameAr : p.nameEn).slice(0, 14) + "…"
-        : isAr
-          ? p.nameAr
-          : p.nameEn,
-    budget: p.budget,
-    actual: p.spent,
-    status: p.status,
-  }));
+  const fullChartData = useMemo(
+    () =>
+      filtered.map((p) => ({
+        name: isAr ? p.nameAr : p.nameEn,
+        shortName:
+          (isAr ? p.nameAr : p.nameEn).length > 16
+            ? (isAr ? p.nameAr : p.nameEn).slice(0, 14) + "…"
+            : isAr
+              ? p.nameAr
+              : p.nameEn,
+        budget: p.budget,
+        actual: p.spent,
+        status: p.status,
+      })),
+    [filtered, isAr]
+  );
+
+  const chartData = useMemo(() => {
+    const n =
+      chartTimeRange === "3m" ? 2 : chartTimeRange === "6m" ? 3 : chartTimeRange === "12m" ? 4 : fullChartData.length;
+    return fullChartData.slice(0, n);
+  }, [fullChartData, chartTimeRange]);
 
   return (
     <div dir={dir} className="flex flex-col h-full overflow-y-auto bg-background">
@@ -282,7 +297,7 @@ export default function ProjectCashFlowPage() {
             <CardContent className="px-4 pb-4">
               <div className="flex items-baseline gap-2">
                 <p className="text-2xl font-bold tabular-nums tracking-tighter">
-                  {fmtCurrency(totalBudget, currencySymbol)}
+                  {fmt(totalBudget)}
                 </p>
                 <Wallet className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -298,7 +313,7 @@ export default function ProjectCashFlowPage() {
             <CardContent className="px-4 pb-4">
               <div className="flex items-baseline gap-2">
                 <p className="text-2xl font-bold tabular-nums tracking-tighter">
-                  {fmtCurrency(totalSpent, currencySymbol)}
+                  {fmt(totalSpent)}
                 </p>
                 <span className="text-xs text-muted-foreground font-medium">
                   ({pct(totalSpent, totalBudget)}%)
@@ -358,9 +373,9 @@ export default function ProjectCashFlowPage() {
                           {isAr ? "الإنفاق" : "Spent"}
                         </span>
                         <span className="font-mono font-medium tabular-nums">
-                          {fmtCurrency(project.spent, currencySymbol)}{" "}
+                          {fmt(project.spent)}{" "}
                           <span className="text-muted-foreground">
-                            / {fmtCurrency(project.budget, currencySymbol)}
+                            / {fmt(project.budget)}
                           </span>
                         </span>
                       </div>
@@ -380,7 +395,7 @@ export default function ProjectCashFlowPage() {
                           {isAr ? "معدل الحرق/شهر" : "Burn Rate/mo"}
                         </p>
                         <p className="font-medium font-mono tabular-nums">
-                          {fmtCurrency(project.burnRate, currencySymbol)}
+                          {fmt(project.burnRate)}
                         </p>
                       </div>
                       <div className="text-end">
@@ -406,7 +421,7 @@ export default function ProjectCashFlowPage() {
                             )}
                           >
                             {remaining < 0 ? "-" : ""}
-                            {fmtCurrency(Math.abs(remaining), currencySymbol)}
+                            {fmt(Math.abs(remaining))}
                           </span>
                         </div>
                       </div>
@@ -421,72 +436,96 @@ export default function ProjectCashFlowPage() {
         {/* ── Budget vs Actual Chart ── */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">
-              {isAr ? "الميزانية مقابل الفعلي" : "Budget vs Actual Spending"}
-            </CardTitle>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <CardTitle className="text-sm font-semibold">
+                {isAr ? "الميزانية مقابل الفعلي" : "Budget vs Actual Spending"}
+              </CardTitle>
+              <div className="flex items-center gap-3">
+                <TimeRangeButtons value={chartTimeRange} onChange={setChartTimeRange} isAr={isAr} />
+                <ChartExportButton chartRef={budgetChartRef} downloadLabel="budget-vs-actual" isAr={isAr} />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={chartData}
-                  margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
-                  barGap={4}
+            <div className="h-[320px]" ref={budgetChartRef}>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={chartTimeRange}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="h-full w-full"
                 >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    vertical={false}
-                    stroke="hsl(240 5.9% 90% / 0.5)"
-                  />
-                  <XAxis
-                    dataKey="shortName"
-                    tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    angle={-20}
-                    textAnchor="end"
-                    interval={0}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={55}
-                    tickFormatter={fmtAxisValue}
-                  />
-                  <Tooltip content={<ChartTooltipContent />} />
-                  <Legend
-                    verticalAlign="top"
-                    height={30}
-                    formatter={(value: string) =>
-                      value === "budget"
-                        ? isAr ? "الميزانية" : "Budget"
-                        : isAr ? "الفعلي" : "Actual"
-                    }
-                  />
-                  <Bar
-                    dataKey="budget"
-                    name="budget"
-                    fill="hsl(217 91% 60%)"
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
-                  />
-                  <Bar dataKey="actual" name="actual" radius={[4, 4, 0, 0]} maxBarSize={40}>
-                    {chartData.map((entry, idx) => (
-                      <Cell
-                        key={idx}
-                        fill={
-                          entry.status === "over-budget"
-                            ? "hsl(0 72% 51%)"
-                            : entry.status === "at-risk"
-                              ? "hsl(38 92% 50%)"
-                              : "hsl(142 71% 45%)"
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 10, right: 10, left: 10, bottom: 40 }}
+                      barGap={4}
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="hsl(240 5.9% 90% / 0.5)"
+                      />
+                      <XAxis
+                        dataKey="shortName"
+                        tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        angle={-20}
+                        textAnchor="end"
+                        interval={0}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={55}
+                        tickFormatter={fmtAxis}
+                      />
+                      <Tooltip
+                        content={<ChartTooltipContent fmt={fmt} chartData={chartData} isAr={isAr} />}
+                        key={currCode}
+                        cursor={{ fill: "hsl(142 71% 45% / 0.12)", radius: 8 }}
+                      />
+                      <Legend
+                        verticalAlign="top"
+                        height={30}
+                        formatter={(value: string) =>
+                          value === "budget"
+                            ? isAr ? "الميزانية" : "Budget"
+                            : isAr ? "الفعلي" : "Actual"
                         }
                       />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                      <Bar
+                        dataKey="budget"
+                        name="budget"
+                        fill="hsl(217 91% 60%)"
+                        radius={[4, 4, 0, 0]}
+                        maxBarSize={40}
+                        isAnimationActive
+                        animationDuration={300}
+                        activeBar={{ stroke: "hsl(217 91% 60%)", strokeWidth: 2, radius: [4, 4, 0, 0] }}
+                      />
+                      <Bar dataKey="actual" name="actual" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive animationDuration={300} activeBar={{ stroke: "currentColor", strokeWidth: 2, radius: [4, 4, 0, 0] }}>
+                        {chartData.map((entry, idx) => (
+                          <Cell
+                            key={idx}
+                            fill={
+                              entry.status === "over-budget"
+                                ? "hsl(0 72% 51%)"
+                                : entry.status === "at-risk"
+                                  ? "hsl(38 92% 50%)"
+                                  : "hsl(142 71% 45%)"
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </motion.div>
+              </AnimatePresence>
             </div>
           </CardContent>
         </Card>
@@ -507,7 +546,7 @@ export default function ProjectCashFlowPage() {
             <p className="text-sm leading-relaxed text-amber-900/80 dark:text-amber-200/80">
               {isAr
                 ? "مشروع \"توسعة الأسطول الربع الأول\" بلغ 95% من الميزانية مع بقاء شهرين. أوصي بطلب تمديد ميزانية بقيمة 180,000 ر.س أو تأجيل المشتريات غير الضرورية."
-                : "Project \"Fleet Expansion Q1\" is at 95% of budget with 2 months remaining. I recommend requesting a budget extension of SAR 180K or deferring non-critical purchases."}
+                : `Project "Fleet Expansion Q1" is at 95% of budget with 2 months remaining. I recommend requesting a budget extension of ${fmt(180_000)} or deferring non-critical purchases.`}
             </p>
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="outline" className="text-xs border-amber-300 dark:border-amber-700">

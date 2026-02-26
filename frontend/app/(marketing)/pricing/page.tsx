@@ -78,7 +78,7 @@ export default function PricingPage() {
                     </div>
                   ) : (
                     <span className="text-3xl font-bold">
-                      {isAr ? plan.period_ar : plan.period_en}
+                      {isAr ? (plan as { period_ar: string; period_en: string }).period_ar : (plan as { period_ar: string; period_en: string }).period_en}
                     </span>
                   )}
                 </div>

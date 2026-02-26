@@ -1,25 +1,39 @@
 "use client";
 
+import Link from "next/link";
 import { Search } from "lucide-react";
-import { TenantSwitcher } from "./tenant-switcher";
+import { EntitySwitcher } from "./EntitySwitcher";
 import { LanguageToggle } from "./language-toggle";
 import { UserMenu } from "./user-menu";
 import { MobileSidebar } from "./mobile-sidebar";
-import { Breadcrumbs } from "./breadcrumbs";
-import { DarkModeToggle } from "./dark-mode-toggle";
 import { NotificationBell } from "./notification-bell";
+import { DarkModeToggle } from "./dark-mode-toggle";
 import { useCommandMenu } from "@/lib/command-store";
+import { CurrencySelector } from "./CurrencySelector";
+import { ConsolidatedViewCard } from "./ConsolidatedViewCard";
+import { useI18n } from "@/lib/i18n/context";
+import { cn } from "@/lib/utils";
 
 function SearchTrigger() {
   const { open } = useCommandMenu();
+  const { locale } = useI18n();
+  const isAr = locale === "ar";
+
   return (
     <button
       onClick={open}
-      className="hidden md:flex items-center w-full max-w-[220px] bg-muted/50 hover:bg-muted border border-border text-muted-foreground rounded-md px-3 py-1.5 text-xs transition-colors gap-2"
+      className={cn(
+        "flex items-center w-full max-w-full min-w-0 flex-1 rounded-lg border bg-muted/40 hover:bg-muted/70",
+        "border-border/80 hover:border-emerald-500/40 focus-within:border-emerald-500/50",
+        "px-4 py-2.5 gap-3 transition-all duration-200",
+        "focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:ring-offset-2 focus:ring-offset-background",
+      )}
     >
-      <Search className="h-3.5 w-3.5 shrink-0" />
-      <span className="flex-1 text-start truncate">Search or jump to...</span>
-      <kbd className="ms-auto hidden sm:inline-flex h-5 items-center gap-0.5 rounded border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+      <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <span className="flex-1 text-start text-sm text-muted-foreground truncate">
+        {isAr ? "بحث أو انتقل إلى..." : "Search or jump to..."}
+      </span>
+      <kbd className="hidden sm:inline-flex h-6 items-center gap-0.5 rounded border border-border/80 bg-background px-2 font-mono text-[10px] font-medium text-muted-foreground">
         ⌘K
       </kbd>
     </button>
@@ -27,18 +41,49 @@ function SearchTrigger() {
 }
 
 export function Navbar() {
+  const { dir } = useI18n();
+
   return (
-    <header data-navbar className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 print:hidden">
+    <header
+      data-navbar
+      dir={dir}
+      className={cn(
+        "sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 print:hidden",
+        "gap-6 md:gap-8",
+      )}
+    >
       <MobileSidebar />
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Breadcrumbs />
+
+      {/* ── Left: Logo + Entity Switcher ── */}
+      <div className="flex items-center gap-3 shrink-0 min-w-0">
+        <Link
+          href="/app/dashboard"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-500 transition-colors"
+        >
+          T
+        </Link>
+        <span className="hidden sm:inline text-sm font-semibold text-foreground whitespace-nowrap">
+          Tadfuq<span className="text-emerald-600">.ai</span>
+        </span>
+        <div className="hidden sm:block shrink-0 min-w-0">
+          <EntitySwitcher compact />
+        </div>
+      </div>
+
+      {/* ── Center: Wide search ── */}
+      <div className="flex-1 flex items-center min-w-0 max-w-2xl mx-auto w-full">
         <SearchTrigger />
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        <TenantSwitcher />
+
+      {/* ── Right: Currency, Consolidated card, Notifications, Language, User ── */}
+      <div className="flex items-center gap-2 shrink-0">
+        <CurrencySelector />
+        <div className="hidden lg:block">
+          <ConsolidatedViewCard />
+        </div>
+        <NotificationBell />
         <LanguageToggle />
         <DarkModeToggle />
-        <NotificationBell />
         <UserMenu />
       </div>
     </header>

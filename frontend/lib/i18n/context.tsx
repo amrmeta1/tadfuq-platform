@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 import { dictionaries, type Locale, type Dictionary } from "./dictionaries";
 
 interface I18nContextValue {
@@ -12,19 +12,24 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
+const LOCALE_STORAGE_KEY = "locale";
+
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("locale") as Locale) || "en";
-    }
-    return "en";
-  });
+  // Use fixed default so server and first client render match (avoids hydration error).
+  const [locale, setLocaleState] = useState<Locale>("en");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOCALE_STORAGE_KEY) as Locale | null;
+      if (saved && (saved === "en" || saved === "ar")) setLocaleState(saved);
+    } catch { /* ignore */ }
+  }, []);
 
   const setLocale = useCallback((l: Locale) => {
     setLocaleState(l);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("locale", l);
-    }
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, l);
+    } catch { /* ignore */ }
   }, []);
 
   const t = dictionaries[locale];

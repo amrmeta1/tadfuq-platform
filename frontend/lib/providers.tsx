@@ -7,6 +7,8 @@ import { ThemeProvider } from "next-themes";
 import { I18nProvider } from "@/lib/i18n/context";
 import { TenantProvider } from "@/lib/hooks/use-tenant";
 import { CompanyProvider } from "@/contexts/CompanyContext";
+import { CurrencyProvider } from "@/contexts/CurrencyContext";
+import { EntityProvider } from "@/contexts/EntityContext";
 import { ToastProvider } from "@/components/ui/toast";
 import { CommandMenuProvider } from "@/lib/command-store";
 import { CommandPalette } from "@/components/global/command-palette";
@@ -32,12 +34,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
           <I18nProvider>
             <TenantProvider>
               <CompanyProvider>
+              <CurrencyProvider>
+              <EntityProvider>
               <ToastProvider>
                 <CommandMenuProvider>
                   <CommandPalette />
                   {children}
                 </CommandMenuProvider>
               </ToastProvider>
+              </EntityProvider>
+              </CurrencyProvider>
               </CompanyProvider>
             </TenantProvider>
           </I18nProvider>

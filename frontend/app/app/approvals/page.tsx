@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useI18n } from "@/lib/i18n/context";
-import { useCompany } from "@/contexts/CompanyContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -92,8 +92,8 @@ const POLICY_LEVELS = [
     color: "border-t-emerald-500",
     bg: "bg-emerald-500/10",
     dot: "bg-emerald-500",
-    rangeEn: "Up to SAR 50,000",
-    rangeAr: "حتى ٥٠,٠٠٠ ر.س",
+    rangeDisplay: (fmt: (n: number) => string, isAr: boolean) =>
+      isAr ? `حتى ${fmt(50_000)}` : `Up to ${fmt(50_000)}`,
     approversNeeded: 1,
     roles: [
       { initials: "FM", nameEn: "Finance Manager", nameAr: "مدير المالية" },
@@ -104,8 +104,8 @@ const POLICY_LEVELS = [
     color: "border-t-amber-500",
     bg: "bg-amber-500/10",
     dot: "bg-amber-500",
-    rangeEn: "SAR 50,001 – 500,000",
-    rangeAr: "٥٠,٠٠١ – ٥٠٠,٠٠٠ ر.س",
+    rangeDisplay: (fmt: (n: number) => string) =>
+      `${fmt(50_001)} – ${fmt(500_000)}`,
     approversNeeded: 2,
     roles: [
       { initials: "FM", nameEn: "Finance Manager", nameAr: "مدير المالية" },
@@ -117,8 +117,8 @@ const POLICY_LEVELS = [
     color: "border-t-red-500",
     bg: "bg-red-500/10",
     dot: "bg-red-500",
-    rangeEn: "Above SAR 500,000",
-    rangeAr: "أكثر من ٥٠٠,٠٠٠ ر.س",
+    rangeDisplay: (fmt: (n: number) => string, isAr: boolean) =>
+      isAr ? `أكثر من ${fmt(500_000)}` : `Above ${fmt(500_000)}`,
     approversNeeded: 3,
     roles: [
       { initials: "FM", nameEn: "Finance Manager", nameAr: "مدير المالية" },
@@ -310,10 +310,6 @@ const COMPLETED_APPROVALS: CompletedApproval[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtSAR(n: number): string {
-  return `SAR ${n.toLocaleString("en-US")}`;
-}
-
 function typeBadgeClasses(type: ApprovalRequest["type"]): string {
   switch (type) {
     case "payment":
@@ -363,7 +359,7 @@ function AvatarCircle({
 
 // ── Expanded detail panel ────────────────────────────────────────────────────
 
-function ApprovalDetail({ req, isAr }: { req: ApprovalRequest; isAr: boolean }) {
+function ApprovalDetail({ req, isAr, fmt }: { req: ApprovalRequest; isAr: boolean; fmt: (n: number) => string }) {
   return (
     <div className="space-y-5 pt-4 border-t border-border/50">
       {/* Details table */}
@@ -374,7 +370,7 @@ function ApprovalDetail({ req, isAr }: { req: ApprovalRequest; isAr: boolean }) 
           { labelEn: "Bank", labelAr: "البنك", valueEn: req.bankEn, valueAr: req.bankAr },
           { labelEn: "Reference", labelAr: "المرجع", valueEn: req.reference, valueAr: req.reference },
           { labelEn: "Category", labelAr: "الفئة", valueEn: req.categoryEn, valueAr: req.categoryAr },
-          { labelEn: "Amount", labelAr: "المبلغ", valueEn: fmtSAR(req.amount), valueAr: fmtSAR(req.amount) },
+          { labelEn: "Amount", labelAr: "المبلغ", valueEn: fmt(req.amount), valueAr: fmt(req.amount) },
         ].map((field) => (
           <div key={field.labelEn}>
             <p className="text-muted-foreground text-xs mb-0.5">
@@ -462,7 +458,7 @@ function ApprovalDetail({ req, isAr }: { req: ApprovalRequest; isAr: boolean }) 
 export default function ApprovalsPage() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
-  const { profile } = useCompany();
+  const { fmt } = useCurrency();
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -531,7 +527,7 @@ export default function ApprovalsPage() {
                     </span>
                   </div>
                   <p className="text-sm font-semibold">
-                    {isAr ? p.rangeAr : p.rangeEn}
+                    {p.rangeDisplay(fmt, isAr)}
                   </p>
                   <div className="flex items-center gap-1.5">
                     {p.roles.map((r, i) => (
@@ -625,7 +621,7 @@ export default function ApprovalsPage() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div className="flex items-center gap-4 text-sm">
                         <span className="font-bold text-base tabular-nums">
-                          {fmtSAR(req.amount)}
+                          {fmt(req.amount)}
                         </span>
                         <div className="flex items-center gap-1.5 text-muted-foreground">
                           <AvatarCircle initials={req.requestorInitials} size="sm" />
@@ -680,7 +676,7 @@ export default function ApprovalsPage() {
                     </div>
 
                     {/* Expanded detail */}
-                    {isExpanded && <ApprovalDetail req={req} isAr={isAr} />}
+                    {isExpanded && <ApprovalDetail req={req} isAr={isAr} fmt={fmt} />}
                   </CardContent>
                 </Card>
               );
@@ -733,7 +729,7 @@ export default function ApprovalsPage() {
                           {isAr ? c.descriptionAr : c.descriptionEn}
                         </td>
                         <td className="px-4 py-3 tabular-nums font-medium">
-                          {fmtSAR(c.amount)}
+                          {fmt(c.amount)}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
