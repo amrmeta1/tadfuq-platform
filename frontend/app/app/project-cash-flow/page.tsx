@@ -506,9 +506,9 @@ export default function ProjectCashFlowPage() {
                         maxBarSize={40}
                         isAnimationActive
                         animationDuration={300}
-                        activeBar={{ stroke: "hsl(217 91% 60%)", strokeWidth: 2, radius: [4, 4, 0, 0] }}
+                        activeBar={{ stroke: "hsl(217 91% 60%)", strokeWidth: 2 }}
                       />
-                      <Bar dataKey="actual" name="actual" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive animationDuration={300} activeBar={{ stroke: "currentColor", strokeWidth: 2, radius: [4, 4, 0, 0] }}>
+                      <Bar dataKey="actual" name="actual" radius={[4, 4, 0, 0]} maxBarSize={40} isAnimationActive animationDuration={300} activeBar={{ stroke: "currentColor", strokeWidth: 2 }}>
                         {chartData.map((entry, idx) => (
                           <Cell
                             key={idx}

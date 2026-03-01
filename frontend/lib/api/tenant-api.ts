@@ -9,6 +9,9 @@ import type {
   AddMemberInput,
   ChangeMemberRoleInput,
   AuditLog,
+  SystemStatus,
+  TreasurySettings,
+  UpdateTreasurySettingsInput,
 } from "./types";
 
 export async function getProfile(): Promise<ApiResponse<User>> {
@@ -69,4 +72,33 @@ export async function listAuditLogs(
     limit: String(limit),
     offset: String(offset),
   });
+}
+
+export async function getSystemStatus(): Promise<ApiResponse<SystemStatus>> {
+  const { MOCKS_ENABLED, getMockSystemStatus } = await import("./mock-data");
+  if (MOCKS_ENABLED) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return { data: getMockSystemStatus() };
+  }
+  return tenantApi.get("/system/status");
+}
+
+export async function getTreasurySettings(): Promise<ApiResponse<TreasurySettings>> {
+  const { MOCKS_ENABLED, getMockTreasurySettings } = await import("./mock-data");
+  if (MOCKS_ENABLED) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return { data: getMockTreasurySettings() };
+  }
+  return tenantApi.get("/settings/treasury");
+}
+
+export async function updateTreasurySettings(
+  input: UpdateTreasurySettingsInput
+): Promise<ApiResponse<TreasurySettings>> {
+  const { MOCKS_ENABLED } = await import("./mock-data");
+  if (MOCKS_ENABLED) {
+    await new Promise(resolve => setTimeout(resolve, 800));
+    return { data: input };
+  }
+  return tenantApi.put("/settings/treasury", input);
 }

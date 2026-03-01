@@ -18,6 +18,7 @@ type IngestionRouterDeps struct {
 	AuditRepo domain.AuditLogRepository
 	Ingestion *IngestionHandler
 	Analysis  *AnalysisHandler
+	Forecast  *ForecastHandler
 }
 
 // NewIngestionRouter builds the chi router for the ingestion service.
@@ -64,6 +65,9 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 			// Cash analysis (run and get latest)
 			r.With(middleware.RequirePermission(auth.PermIngestionRead)).Get("/analysis/latest", deps.Analysis.GetLatest)
 			r.With(middleware.RequirePermission(auth.PermIngestionRead)).Post("/analysis/run", deps.Analysis.RunAnalysis)
+
+			// Cash forecast (13-week deterministic forecast)
+			r.With(middleware.RequirePermission(auth.PermTreasuryRead)).Get("/forecast/current", deps.Forecast.GetCurrentForecast)
 		})
 	})
 

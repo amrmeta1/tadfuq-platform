@@ -69,3 +69,17 @@ export async function resolveAlert(
   if (MOCKS_ENABLED) return;
   return tenantApi.post(`/tenants/${tenantId}/alerts/${alertId}/resolve`);
 }
+
+export async function getActiveAlerts(tenantId: string): Promise<Alert[]> {
+  if (MOCKS_ENABLED) {
+    const result = getMockAlerts();
+    return result.data.filter((a) => a.status === "open") as Alert[];
+  }
+  try {
+    const response = await tenantApi.get<{ data: Alert[] }>(`/tenants/${tenantId}/alerts/active`);
+    return response.data;
+  } catch (error) {
+    const response = await listAlerts(tenantId, { status: 'open' });
+    return response.data;
+  }
+}

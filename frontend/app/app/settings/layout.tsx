@@ -13,6 +13,9 @@ const tabs = [
   { href: "/app/settings/roles", labelKey: "roles" as const },
   { href: "/app/settings/integrations", labelKey: "integrations" as const },
   { href: "/app/settings/security", labelKey: "security" as const, permission: "audit:read" as const },
+  { href: "/app/settings/audit-logs", labelKey: "auditLogs" as const, permission: "audit:read" as const },
+  { href: "/app/settings/system-status", labelKey: "systemStatus" as const, permission: "audit:read" as const },
+  { href: "/app/settings/treasury-controls", labelKey: "treasuryControls" as const },
 ];
 
 export default function SettingsLayout({

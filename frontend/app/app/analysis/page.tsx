@@ -541,7 +541,7 @@ export default function AnalysisPage() {
                       <Tooltip
                         content={(props) => {
                           if (!props?.active || !props?.payload?.length) return null;
-                          const balanceEntry = props.payload.find((p: { dataKey?: string }) => p.dataKey === "balance");
+                          const balanceEntry = props.payload.find((p) => String(p?.dataKey) === "balance");
                           if (!balanceEntry) return null;
                           return (
                             <div className="rounded-lg border bg-popover px-3 py-2 text-sm shadow-md">

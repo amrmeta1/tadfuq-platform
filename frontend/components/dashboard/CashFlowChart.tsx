@@ -25,6 +25,7 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { TimeRangeButtons, type TimeRangeKey } from "@/components/charts/TimeRangeButtons";
 import { RechartsTooltipGlass } from "@/components/charts/ChartTooltipGlass";
 import { ChartExportButton } from "@/components/charts/ChartExportButton";
+import { chartGridProps, chartXAxisProps, chartYAxisProps, chartTooltipCursor } from "@/components/charts/chartStyles";
 
 type MonthKey = "oct" | "nov" | "dec" | "jan" | "feb" | "mar" | "apr" | "may" | "jun" | "jul" | "aug" | "sep";
 
@@ -195,23 +196,12 @@ export default function CashFlowChart({ currency: currencyProp, dateRange }: Cas
                     </feMerge>
                   </filter>
                 </defs>
-                <CartesianGrid stroke="currentColor" opacity={0.05} vertical={false} />
-                <XAxis
-                  dataKey="month"
-                  tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={56}
-                  tickFormatter={fmtAxis}
-                />
+                <CartesianGrid {...chartGridProps} />
+                <XAxis dataKey="month" {...chartXAxisProps} />
+                <YAxis {...chartYAxisProps} width={56} tickFormatter={fmtAxis} />
                 <Tooltip
                   content={<TooltipContent fmt={fmt} data={data} isAr={isAr} />}
-                  cursor={{ fill: "hsl(142 71% 45% / 0.12)", radius: 8 }}
+                  cursor={chartTooltipCursor}
                 />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 16 }} />
                 <Bar
@@ -222,7 +212,7 @@ export default function CashFlowChart({ currency: currencyProp, dateRange }: Cas
                   maxBarSize={40}
                   isAnimationActive
                   animationDuration={300}
-                  activeBar={{ stroke: "hsl(142 71% 45%)", strokeWidth: 2.5, radius: [4, 4, 0, 0], filter: "url(#cashChartGlow)" }}
+                  activeBar={{ stroke: "hsl(142 71% 45%)", strokeWidth: 2.5, filter: "url(#cashChartGlow)" }}
                 />
                 <Bar
                   dataKey="outflow"
@@ -232,7 +222,7 @@ export default function CashFlowChart({ currency: currencyProp, dateRange }: Cas
                   maxBarSize={40}
                   isAnimationActive
                   animationDuration={300}
-                  activeBar={{ stroke: "hsl(346 77% 72%)", strokeWidth: 2.5, radius: [4, 4, 0, 0] }}
+                  activeBar={{ stroke: "hsl(346 77% 72%)", strokeWidth: 2.5 }}
                 />
                 <Line
                   type="monotone"

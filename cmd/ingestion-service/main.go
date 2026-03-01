@@ -22,6 +22,7 @@ import (
 	"github.com/finch-co/cashflow/internal/config"
 	"github.com/finch-co/cashflow/internal/ingestion"
 	"github.com/finch-co/cashflow/internal/observability"
+	"github.com/finch-co/cashflow/internal/usecase"
 )
 
 func main() {
@@ -88,7 +89,7 @@ func run() error {
 	idempotencyRepo := db.NewIdempotencyRepo(pool)
 	analysisRepo := db.NewAnalysisRepo(pool)
 
-	// Init use cases (bounded contexts: ingestion, analysis)
+	// Init use cases (bounded contexts: ingestion, analysis, forecast)
 	ingestionUC := ingestion.NewUseCase(
 		bankAccountRepo,
 		rawTxnRepo,
@@ -98,10 +99,12 @@ func run() error {
 		publisher,
 	)
 	analysisUC := analysis.NewUseCase(analysisRepo)
+	forecastUC := usecase.NewForecastUseCase(bankTxnRepo, bankAccountRepo)
 
 	// Init HTTP handlers
 	ingestionHandler := httpAdapter.NewIngestionHandler(ingestionUC, publisher)
 	analysisHandler := httpAdapter.NewAnalysisHandler(analysisUC, analysisRepo)
+	forecastHandler := httpAdapter.NewForecastHandler(forecastUC)
 
 	// Build router
 	router := httpAdapter.NewIngestionRouter(httpAdapter.IngestionRouterDeps{
@@ -110,6 +113,7 @@ func run() error {
 		AuditRepo: auditRepo,
 		Ingestion: ingestionHandler,
 		Analysis:  analysisHandler,
+		Forecast:  forecastHandler,
 	})
 
 	// Start command consumer (background goroutine)

@@ -2,7 +2,6 @@
 
 import {
   ComposedChart,
-  Area,
   Line,
   XAxis,
   YAxis,
@@ -12,153 +11,244 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
+import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import type { SimulatedDay } from "./use-forecast-simulation";
+import {
+  chartGridProps,
+  chartXAxisProps,
+  chartYAxisProps,
+  chartTooltipCursor,
+  CHART_TOOLTIP_CLASS,
+} from "@/components/charts/chartStyles";
+import type { Scenario } from "@/contexts/ScenarioContext";
+
+const SCENARIO_COLORS = [
+  "hsl(243 75% 59%)",  // indigo
+  "hsl(258 90% 66%)",  // violet
+  "hsl(38 92% 50%)",   // amber
+];
+
+const SCENARIO_LETTERS = ["A", "B", "C"];
 
 // ── Custom Tooltip ──────────────────────────────────────────────────────────
 
+interface TooltipPayloadItem {
+  dataKey: string;
+  value: number;
+  name: string;
+  color?: string;
+}
+
 interface TooltipProps {
   active?: boolean;
-  payload?: Array<{ dataKey: string; value: number; name: string }>;
+  payload?: TooltipPayloadItem[];
   label?: string;
   fmt: (n: number) => string;
   isAr: boolean;
+  scenarioNames: Record<string, string>;
 }
 
-function ForecastTooltip({ active, payload, label, fmt, isAr }: TooltipProps) {
+function ForecastTooltip({
+  active,
+  payload,
+  label,
+  fmt,
+  isAr,
+  scenarioNames,
+}: TooltipProps) {
   if (!active || !payload?.length) return null;
 
   const base = payload.find((p) => p.dataKey === "baseBalance")?.value ?? 0;
-  const sim = payload.find((p) => p.dataKey === "simulatedBalance")?.value ?? 0;
-  const variance = sim - base;
 
   return (
-    <div className="rounded-md border bg-popover shadow-lg p-3 text-xs min-w-[210px] space-y-2">
-      <p className="font-semibold text-foreground border-b pb-1.5 mb-1.5">{label}</p>
+    <div className={cn(CHART_TOOLTIP_CLASS, "min-w-[210px] space-y-2 text-xs")}>
+      <p className="font-semibold text-zinc-100 border-b border-zinc-700 pb-2 mb-2">
+        {label}
+      </p>
 
       <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground flex items-center gap-1.5">
-          <span className="inline-block h-1.5 w-4 rounded-full bg-muted-foreground/40" style={{ borderTop: "2px dashed" }} />
-          {isAr ? "الأساسي" : "Base"}
-        </span>
-        <span className="font-medium tabular-nums text-foreground">
-          {fmt(base)}
-        </span>
-      </div>
-
-      <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground flex items-center gap-1.5">
+        <span className="text-zinc-400 flex items-center gap-1.5">
           <span className="inline-block h-1.5 w-4 rounded-full bg-primary" />
-          {isAr ? "المحاكاة" : "Simulated"}
+          {isAr ? "الأساس" : "Base"}
         </span>
-        <span className={cn("font-semibold tabular-nums", sim < 0 ? "outflow" : "text-foreground")}>
-          {fmt(sim)}
-        </span>
+        <span className="font-medium tabular-nums text-zinc-200">{fmt(base)}</span>
       </div>
 
-      <div className="border-t pt-1.5 flex justify-between gap-4">
-        <span className="text-muted-foreground">{isAr ? "الفارق" : "Variance"}</span>
-        <span className={cn("font-semibold tabular-nums", variance >= 0 ? "inflow" : "outflow")}>
-          {variance >= 0 ? "+" : ""}{fmt(variance)}
-        </span>
-      </div>
+      {payload
+        .filter((p) => p.dataKey.startsWith("scenario_"))
+        .map((p) => {
+          const val = p.value ?? 0;
+          const delta = val - base;
+          const name = scenarioNames[p.dataKey] ?? p.dataKey;
+          return (
+            <div key={p.dataKey} className="flex justify-between gap-4">
+              <span className="text-zinc-400 flex items-center gap-1.5">
+                <span
+                  className="inline-block h-1.5 w-4 rounded-full"
+                  style={{ background: p.color ?? "hsl(243 75% 59%)" }}
+                />
+                {name}
+              </span>
+              <span
+                className={cn(
+                  "font-medium tabular-nums",
+                  val < 0 ? "text-rose-400" : "text-zinc-200"
+                )}
+              >
+                {fmt(val)}
+              </span>
+              <span
+                className={cn(
+                  "text-xs tabular-nums",
+                  delta >= 0 ? "text-emerald-400" : "text-rose-400"
+                )}
+              >
+                ({delta >= 0 ? "+" : ""}{fmt(delta)})
+              </span>
+            </div>
+          );
+        })}
     </div>
   );
 }
 
 // ── Chart ───────────────────────────────────────────────────────────────────
 
-interface ForecastChartProps {
-  data: SimulatedDay[];
+export interface ForecastChartProps {
+  base: number[];
+  scenarios: Scenario[];
+  labels: string[];
   fmt: (n: number) => string;
   fmtAxis?: (n: number) => string;
   isAr: boolean;
+  currencyCode?: string;
+  /** When provided, only scenario lines whose id is in this set are rendered. Base is always shown. */
+  visibleScenarioIds?: Set<string> | null;
 }
 
-export function ForecastChart({ data, fmt, fmtAxis, isAr }: ForecastChartProps) {
-  // Sample every 3rd day to keep X-axis readable (60 ticks → 20)
-  const tickDays = new Set(data.filter((_, i) => i % 3 === 0).map((d) => d.label));
+export function ForecastChart({
+  base,
+  scenarios,
+  labels,
+  fmt,
+  fmtAxis,
+  isAr,
+  currencyCode = "QAR",
+  visibleScenarioIds = null,
+}: ForecastChartProps) {
+  const chartData = useMemo(() => {
+    return labels.map((label, i) => {
+      const point: Record<string, string | number> = {
+        label,
+        baseBalance: base[i] ?? 0,
+      };
+      scenarios.forEach((s) => {
+        point[`scenario_${s.id}`] = s.newForecast[i] ?? 0;
+      });
+      return point;
+    });
+  }, [labels, base, scenarios]);
+
+  const scenarioNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    scenarios.forEach((s, idx) => {
+      const letter = SCENARIO_LETTERS[idx] ?? String(idx + 1);
+      names[`scenario_${s.id}`] = isAr ? `السيناريو ${letter}` : `Scenario ${letter}`;
+    });
+    return names;
+  }, [scenarios, isAr]);
+
+  const scenariosToShow =
+    visibleScenarioIds == null
+      ? scenarios
+      : scenarios.filter((s) => visibleScenarioIds.has(s.id));
+
+  const tickDays = new Set(
+    chartData.filter((_, i) => i % 3 === 0).map((d) => d.label)
+  );
   const axisFmt = fmtAxis ?? ((v: number) => `${(v / 1000).toFixed(0)}k`);
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-        <defs>
-          {/* Simulated area gradient */}
-          <linearGradient id="simGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="hsl(243 75% 59%)" stopOpacity={0.18} />
-            <stop offset="95%" stopColor="hsl(243 75% 59%)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
+    <div className="w-full space-y-3">
+      <ResponsiveContainer width="100%" height={260}>
+        <ComposedChart
+          data={chartData}
+          margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        >
+          <CartesianGrid {...chartGridProps} />
 
-        <CartesianGrid
-          strokeDasharray="3 3"
-          stroke="hsl(240 5.9% 90%)"
-          vertical={false}
-          className="dark:[stroke:hsl(240_3.7%_15.9%)]"
-        />
+          <XAxis
+            dataKey="label"
+            {...chartXAxisProps}
+            interval="preserveStartEnd"
+            tickFormatter={(v) => (tickDays.has(v) ? v : "")}
+          />
 
-        <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-          tickFormatter={(v) => (tickDays.has(v) ? v : "")}
-        />
+          <YAxis
+            {...chartYAxisProps}
+            tickFormatter={axisFmt}
+            width={42}
+            orientation={isAr ? "right" : "left"}
+          />
 
-        <YAxis
-          tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }}
-          axisLine={false}
-          tickLine={false}
-          tickFormatter={axisFmt}
-          width={42}
-          orientation={isAr ? "right" : "left"}
-        />
+          <ReTooltip
+            content={
+              <ForecastTooltip
+                fmt={fmt}
+                isAr={isAr}
+                scenarioNames={scenarioNames}
+              />
+            }
+            cursor={chartTooltipCursor}
+          />
 
-        <ReTooltip
-          content={<ForecastTooltip fmt={fmt} isAr={isAr} />}
-          cursor={{ stroke: "hsl(240 5.9% 90%)", strokeWidth: 1 }}
-        />
+          <ReferenceLine
+            y={0}
+            stroke="hsl(0 72% 51% / 0.6)"
+            strokeDasharray="4 3"
+            strokeWidth={1.5}
+            label={{
+              value: isAr ? "صفر" : "Zero",
+              position: "insideTopRight",
+              fontSize: 9,
+              fill: "hsl(0 72% 51%)",
+            }}
+          />
 
-        {/* ── Cash Zero reference line ── */}
-        <ReferenceLine
-          y={0}
-          stroke="hsl(0 72% 51% / 0.6)"
-          strokeDasharray="4 3"
-          strokeWidth={1.5}
-          label={{
-            value: isAr ? "صفر" : "Zero",
-            position: "insideTopRight",
-            fontSize: 9,
-            fill: "hsl(0 72% 51%)",
-          }}
-        />
+          {/* Base: solid primary line */}
+          <Line
+            dataKey="baseBalance"
+            stroke="hsl(var(--primary))"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4, strokeWidth: 0, fill: "hsl(var(--primary))" }}
+            name={isAr ? "الأساس" : "Base"}
+            legendType="line"
+          />
 
-        {/* ── Base scenario: muted dashed line, no fill ── */}
-        <Line
-          dataKey="baseBalance"
-          stroke="hsl(240 3.8% 46.1% / 0.5)"
-          strokeWidth={1.5}
-          strokeDasharray="4 4"
-          dot={false}
-          activeDot={false}
-          name={isAr ? "الأساسي" : "Base"}
-          legendType="line"
-        />
+          {/* Each scenario: dashed line, distinct color */}
+          {scenariosToShow.map((s, idx) => {
+            const dataKey = `scenario_${s.id}`;
+            const color = SCENARIO_COLORS[idx % SCENARIO_COLORS.length];
+            const name = scenarioNames[dataKey] ?? dataKey;
+            return (
+              <Line
+                key={s.id}
+                dataKey={dataKey}
+                stroke={color}
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0, fill: color }}
+                name={name}
+                legendType="line"
+              />
+            );
+          })}
 
-        {/* ── Simulated scenario: bold solid line + gradient area ── */}
-        <Area
-          dataKey="simulatedBalance"
-          stroke="hsl(243 75% 59%)"
-          strokeWidth={2}
-          fill="url(#simGrad)"
-          dot={false}
-          activeDot={{ r: 4, strokeWidth: 0, fill: "hsl(243 75% 59%)" }}
-          name={isAr ? "المحاكاة" : "Simulated"}
-          legendType="line"
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

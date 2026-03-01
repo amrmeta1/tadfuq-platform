@@ -12,7 +12,7 @@ export const DEV_SKIP_AUTH =
   process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === "true";
 
 // ── Dev skip-login: mock tenant list (no backend) ─────────────
-import type { Tenant, AuditLog } from "./types";
+import type { Tenant, AuditLog, SystemStatus, TreasurySettings } from "./types";
 
 /** Default tenant for development when none is set (aligns with middleware/lib/server tenant "demo"). */
 const now = new Date().toISOString();
@@ -257,5 +257,63 @@ export function getMockReport(id: string) {
         balance: 252_000 + Math.round(i * 1250 + (Math.random() - 0.3) * 5000),
       })),
     },
+  };
+}
+
+// ── System Status ─────────────────────────────────────────────
+export function getMockSystemStatus(): SystemStatus {
+  return {
+    services: [
+      {
+        name: "API Gateway",
+        status: "operational",
+        response_time_ms: 45,
+        last_check: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+      },
+      {
+        name: "Database",
+        status: "operational",
+        response_time_ms: 12,
+        last_check: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
+      },
+      {
+        name: "Authentication Service",
+        status: "operational",
+        response_time_ms: 78,
+        last_check: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
+      },
+      {
+        name: "Ingestion Service",
+        status: "operational",
+        response_time_ms: 156,
+        last_check: new Date(Date.now() - 1 * 60 * 1000).toISOString(),
+      },
+      {
+        name: "Forecast Engine",
+        status: "operational",
+        response_time_ms: 234,
+        last_check: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      },
+    ],
+    uptime_percentage: 99.97,
+    uptime_days: 127,
+    last_backup: {
+      timestamp: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
+      status: "success",
+      size_mb: 2847.56,
+    },
+  };
+}
+
+// ── Treasury Settings ─────────────────────────────────────────
+export function getMockTreasurySettings(): TreasurySettings {
+  return {
+    minimum_cash_floor: 500000,
+    liquidity_multiplier: 1.5,
+    burn_spike_multiplier: 2.0,
+    revenue_drop_threshold: 15,
+    volatility_threshold: 0.25,
+    updated_at: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+    updated_by: "admin@demo.com",
   };
 }

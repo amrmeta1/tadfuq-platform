@@ -16,6 +16,7 @@ import {
   ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, Area,
 } from "recharts";
+import { chartGridProps, chartXAxisProps, chartYAxisProps, chartTooltipCursor, CHART_TOOLTIP_CLASS } from "@/components/charts/chartStyles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -209,26 +210,26 @@ function ChartTooltip({ active, payload, label, fmt }: {
   const actual = payload.find((p) => p.dataKey === "actual");
   const forecast = payload.find((p) => p.dataKey === "forecast");
   return (
-    <div className="bg-popover border border-border shadow-lg rounded-xl p-3 text-xs min-w-[180px] space-y-1.5">
-      <p className="font-semibold text-foreground">{label}</p>
+    <div className={cn(CHART_TOOLTIP_CLASS, "space-y-1.5 text-xs min-w-[180px]")}>
+      <p className="font-semibold text-zinc-100 border-b border-zinc-700 pb-2">{label}</p>
       {actual?.value != null && (
         <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-zinc-400">
             <span className="h-2 w-2 rounded-full bg-indigo-500 inline-block" />
             Actual
           </span>
-          <span className="font-mono font-semibold tabular-nums text-foreground" dir="ltr">
+          <span className="font-mono font-semibold tabular-nums text-zinc-200" dir="ltr">
             {fmt(actual.value)}
           </span>
         </div>
       )}
       {forecast?.value != null && (
         <div className="flex items-center justify-between gap-4">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
+          <span className="flex items-center gap-1.5 text-zinc-400">
             <span className="h-2 w-2 rounded-full border border-violet-400 inline-block" />
             Forecast
           </span>
-          <span className="font-mono font-semibold tabular-nums text-muted-foreground" dir="ltr">
+          <span className="font-mono font-semibold tabular-nums text-zinc-400" dir="ltr">
             {fmt(forecast.value)}
           </span>
         </div>
@@ -727,21 +728,10 @@ export default function CashPositioningPage() {
                     <stop offset="95%" stopColor="rgb(99,102,241)" stopOpacity={0.01} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="currentColor" opacity={0.04} vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={54}
-                  tickFormatter={fmtAxis}
-                />
-                <Tooltip content={<ChartTooltip fmt={fmt} />} key={currCode} />
+                <CartesianGrid {...chartGridProps} />
+                <XAxis dataKey="date" {...chartXAxisProps} />
+                <YAxis {...chartYAxisProps} width={54} tickFormatter={fmtAxis} />
+                <Tooltip content={<ChartTooltip fmt={fmt} />} cursor={chartTooltipCursor} key={currCode} />
 
                 {/* Zero reference */}
                 <ReferenceLine y={0} stroke="hsl(240 3.8% 46.1%)" strokeOpacity={0.3} strokeWidth={1} />

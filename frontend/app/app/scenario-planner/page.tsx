@@ -20,47 +20,17 @@ import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { chartGridProps, chartXAxisProps, chartYAxisProps, chartTooltipCursor, CHART_TOOLTIP_CLASS } from "@/components/charts/chartStyles";
 import { useI18n } from "@/lib/i18n/context";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useMemo } from "react";
+import type { Scenario } from "@/contexts/ScenarioContext";
 import { useScenarioPlanner } from "@/lib/hooks/useScenarioPlanner";
-import { useForecastSimulation } from "@/features/forecast/use-forecast-simulation";
+import { useForecast } from "@/lib/hooks/useForecast";
+import { getTenantId } from "@/lib/api/client";
 import { ForecastChart } from "@/features/forecast/forecast-chart";
-import { ScenarioSandbox } from "@/features/forecast/scenario-sandbox";
 import type { ScenarioAssumptions, ScenarioDerived, ScenarioPreset } from "@/lib/hooks/useScenarioPlanner";
-
-// ── Scenario vs Base diff helper (for KPI cards) ─────────────────────────────
-
-export type TrendType = "better" | "worse" | "same";
-
-export function getScenarioVsBaseDiff(
-  baseValue: number,
-  scenarioValue: number,
-  higherIsBetter: boolean
-): { diff: number; diffPercent: number; trend: TrendType } {
-  const diff = scenarioValue - baseValue;
-  const diffPercent =
-    baseValue !== 0 ? (diff / Math.abs(baseValue)) * 100 : 0;
-  let trend: TrendType = "same";
-  if (diff !== 0) {
-    trend = higherIsBetter ? (diff > 0 ? "better" : "worse") : (diff < 0 ? "better" : "worse");
-  }
-  return { diff, diffPercent, trend };
-}
-
-// Runway: null = infinite (profitable). For comparison use a large number.
-const RUNWAY_INFINITE = 999;
-
-export function getScenarioVsBaseDiffRunway(
-  baseRunwayMonths: number | null,
-  scenarioRunwayMonths: number | null
-): { trend: TrendType; labelKey: "same" | "better" | "worse" } {
-  const base = baseRunwayMonths ?? RUNWAY_INFINITE;
-  const scenario = scenarioRunwayMonths ?? RUNWAY_INFINITE;
-  if (base === scenario) return { trend: "same", labelKey: "same" };
-  return scenario > base
-    ? { trend: "better", labelKey: "better" }
-    : { trend: "worse", labelKey: "worse" };
-}
+import { getScenarioVsBaseDiff, getScenarioVsBaseDiffRunway } from "@/lib/scenarioDiff";
 
 // ── Explain this scenario (deterministic template, no LLM) ─────────────────────
 
@@ -171,21 +141,21 @@ function ChartTooltipContent({ active, payload, label, isAr }: any) {
   const scenarioVal = payload.find((p: any) => p.dataKey === "cashBalance")?.value ?? 0;
   const diff = scenarioVal - baseVal;
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2.5 shadow-md text-xs min-w-[180px] space-y-1.5">
-      <p className="font-semibold text-foreground mb-1.5">{label}</p>
+    <div className={cn(CHART_TOOLTIP_CLASS, "space-y-1.5 text-xs min-w-[180px]")}>
+      <p className="font-semibold text-zinc-100 mb-1.5 border-b border-zinc-700 pb-2">{label}</p>
       <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground">{isAr ? "الأساس" : "Base"}</span>
-        <span className="tabular-nums font-medium">{fmt(baseVal)}</span>
+        <span className="text-zinc-400">{isAr ? "الأساس" : "Base"}</span>
+        <span className="tabular-nums font-medium text-zinc-200">{fmt(baseVal)}</span>
       </div>
       <div className="flex justify-between gap-4">
-        <span className="text-muted-foreground">{isAr ? "السيناريو" : "Scenario"}</span>
-        <span className={cn("tabular-nums font-medium", scenarioVal >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+        <span className="text-zinc-400">{isAr ? "السيناريو" : "Scenario"}</span>
+        <span className={cn("tabular-nums font-medium", scenarioVal >= 0 ? "text-emerald-400" : "text-rose-400")}>
           {fmt(scenarioVal)}
         </span>
       </div>
-      <div className="flex justify-between gap-4 pt-1 border-t border-border">
-        <span className="text-muted-foreground">{isAr ? "التأثير" : "Impact"}</span>
-        <span className={cn("tabular-nums font-semibold", diff >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+      <div className="flex justify-between gap-4 pt-1 border-t border-zinc-700">
+        <span className="text-zinc-400">{isAr ? "التأثير" : "Impact"}</span>
+        <span className={cn("tabular-nums font-semibold", diff >= 0 ? "text-emerald-400" : "text-rose-400")}>
           {diff >= 0 ? "+" : ""}{fmt(diff)}
         </span>
       </div>
@@ -208,9 +178,22 @@ export default function ScenarioPlannerPage() {
   const { locale, dir } = useI18n();
   const { fmt, fmtAxis, selected: currCode } = useCurrency();
   const isAr = locale === "ar";
+  const tenantId = getTenantId();
+  const { data: forecastData, loading: forecastLoading } = useForecast(tenantId);
 
-  const { baseline, simulated, params, setParam, reset, cashZeroDate } =
-    useForecastSimulation();
+  const forecastChartBase = useMemo(() => 
+    forecastData?.forecast.map((d) => d.baseline) ?? [], 
+    [forecastData]
+  );
+  const forecastChartScenarios = useMemo((): Scenario[] => {
+    if (!forecastData || forecastData.forecast.length === 0) return [];
+    // For now, return empty scenarios - will be populated by slider logic
+    return [];
+  }, [forecastData]);
+  const forecastChartLabels = useMemo(() => 
+    forecastData?.forecast.map((d) => isAr ? `أسبوع ${d.week_number}` : `Week ${d.week_number}`) ?? [], 
+    [forecastData, isAr]
+  );
 
   const {
     assumptions,
@@ -673,23 +656,12 @@ export default function ScenarioPlannerPage() {
                       </linearGradient>
                     </defs>
 
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(240 5.9% 90% / 0.5)" />
+                    <CartesianGrid {...chartGridProps} />
 
-                    <XAxis
-                      dataKey="month"
-                      tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: "hsl(240 3.8% 46.1%)" }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={60}
-                      tickFormatter={fmtAxis}
-                    />
+                    <XAxis dataKey="month" {...chartXAxisProps} />
+                    <YAxis {...chartYAxisProps} width={60} tickFormatter={fmtAxis} />
 
-                    <Tooltip content={<ChartTooltipContent isAr={isAr} />} />
+                    <Tooltip content={<ChartTooltipContent isAr={isAr} />} cursor={chartTooltipCursor} />
 
                     <Legend
                       wrapperStyle={{ fontSize: 11 }}
@@ -823,19 +795,39 @@ export default function ScenarioPlannerPage() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <ForecastChart data={simulated} fmt={fmt} fmtAxis={fmtAxis} isAr={isAr} />
+              <ForecastChart
+                base={forecastChartBase}
+                scenarios={forecastChartScenarios}
+                labels={forecastChartLabels}
+                fmt={fmt}
+                fmtAxis={fmtAxis}
+                isAr={isAr}
+                currencyCode={currCode}
+              />
             </CardContent>
           </Card>
 
-          {/* Scenario Sandbox controls */}
-          <ScenarioSandbox
-            params={params}
-            setParam={setParam}
-            reset={reset}
-            cashZeroDate={cashZeroDate}
-            isAr={isAr}
-            locale={locale}
-          />
+          {/* Empty state or loading */}
+          {forecastLoading && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {isAr ? "جاري تحميل التنبؤ..." : "Loading forecast..."}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {!forecastLoading && (!forecastData || forecastData.forecast.length === 0) && (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-sm text-muted-foreground mb-4">
+                  {isAr 
+                    ? "لا توجد بيانات معاملات. قم برفع كشف حساب بنكي لرؤية التنبؤات."
+                    : "No transaction data. Upload a bank statement to see forecasts."}
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
       </div>

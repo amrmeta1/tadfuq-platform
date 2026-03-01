@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { CHART_TOOLTIP_CLASS } from "./chartStyles";
 
 export interface TooltipPayloadItem {
   name: string;
@@ -46,27 +47,22 @@ export function ChartTooltipGlass({
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.15 }}
       className={cn(
-        "rounded-xl border border-emerald-500/40 bg-black/90 backdrop-blur-md shadow-xl min-w-[200px] max-w-[280px]",
-        "ring-1 ring-white/5",
-        "[box-shadow:0_0_0_1px_rgba(16,185,129,0.2),0_12px_40px_-12px_rgba(0,0,0,0.6),0_0_32px_-8px_rgba(16,185,129,0.15)]",
+        CHART_TOOLTIP_CLASS,
         showPremiumLayout ? "px-4 py-3" : "px-3.5 py-2.5 text-xs",
         className
       )}
     >
-      {/* Line 1: Month name in Arabic (e.g. مارس 2026) */}
       {label && (
-        <p className="font-semibold text-white/95 mb-2 border-b border-white/10 pb-2 text-sm">
+        <p className="font-semibold text-zinc-100 mb-2 border-b border-zinc-700 pb-2 text-sm">
           {label}
         </p>
       )}
 
       {showPremiumLayout ? (
         <>
-          {/* Line 2: Main value – big bold, neon green */}
           <p className="text-lg font-bold tabular-nums text-emerald-400 tracking-tight mb-1.5">
-            {fmt(displayMainValue)}
+            {fmt(displayMainValue ?? 0)}
           </p>
-          {/* Line 3: Percentage change – green / red */}
           {pctChange != null && (
             <p
               className={cn(
@@ -77,9 +73,8 @@ export function ChartTooltipGlass({
               {pctChange >= 0 ? "+" : ""}{pctChange.toFixed(1)}%
             </p>
           )}
-          {/* Line 4: Small second line – الوارد | الصادر */}
           {subLine && (
-            <p className="text-[11px] text-white/70 border-t border-white/10 pt-2 mt-1 leading-relaxed">
+            <p className="text-[11px] text-zinc-400 border-t border-zinc-700 pt-2 mt-1 leading-relaxed">
               {subLine}
             </p>
           )}
@@ -89,7 +84,7 @@ export function ChartTooltipGlass({
           <div className="space-y-1 text-xs">
             {payload?.map((p) => (
               <div key={p.dataKey ?? p.name} className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-1.5 text-white/80">
+                <span className="flex items-center gap-1.5 text-zinc-300">
                   {p.color != null && (
                     <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: p.color }} />
                   )}
@@ -102,7 +97,7 @@ export function ChartTooltipGlass({
           {pctChange != null && (
             <div
               className={cn(
-                "mt-1.5 pt-1.5 border-t border-white/10 font-medium tabular-nums text-xs",
+                "mt-1.5 pt-1.5 border-t border-zinc-700 font-medium tabular-nums text-xs",
                 pctChange >= 0 ? "text-emerald-400" : "text-rose-400"
               )}
             >

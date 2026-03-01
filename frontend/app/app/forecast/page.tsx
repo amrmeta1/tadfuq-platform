@@ -1,14 +1,20 @@
 "use client";
 
+import { useMemo, useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
-import { ChevronDown, RefreshCw, Settings2, Wallet, ArrowUpCircle, TrendingUp, LayoutGrid } from "lucide-react";
+import { ChevronDown, RefreshCw, Settings2, Wallet, ArrowUpCircle, TrendingUp, LayoutGrid, X, Eye, EyeOff, Trash2, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n/context";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useScenario } from "@/contexts/ScenarioContext";
+import { cn } from "@/lib/utils";
 import type { CashflowMonthPoint } from "@/components/forecast/MasterForecastChart";
+import { ForecastChart } from "@/features/forecast/forecast-chart";
+import { useForecast } from "@/lib/hooks/useForecast";
+import { getTenantId } from "@/lib/api/client";
 
 const MasterForecastChart = dynamic(
   () => import("@/components/forecast/MasterForecastChart").then((m) => ({ default: m.MasterForecastChart })),
@@ -28,6 +34,52 @@ type GridRow = {
 };
 
 const CURRENT_MONTH_IDX = 2;
+
+function scenarioTypeLabel(
+  type: "delay_payment" | "split_payment" | "accelerate_receivable",
+  isAr: boolean
+): string {
+  const labels: Record<string, { ar: string; en: string }> = {
+    delay_payment: { ar: "تأخير الدفع", en: "Delay payment" },
+    split_payment: { ar: "تقسيم الدفع", en: "Split payment" },
+    accelerate_receivable: { ar: "تسريع التحصيل", en: "Accelerate receivable" },
+  };
+  const t = labels[type];
+  return isAr ? t?.ar ?? type : t?.en ?? type;
+}
+
+/** Apply scenario delta to chart balances (Option A: shift monthly view). */
+function applyScenarioDeltaToChart(
+  data: CashflowMonthPoint[],
+  deltaCash: number
+): CashflowMonthPoint[] {
+  return data.map((point) => {
+    const out = { ...point };
+    if (point.balance != null) out.balance = point.balance + deltaCash;
+    if (point.balanceForecast != null) out.balanceForecast = point.balanceForecast + deltaCash;
+    return out;
+  });
+}
+
+/** Apply scenario delta to balance rows only (Opening + Closing). */
+function applyScenarioDeltaToGridRows(rows: GridRow[], deltaCash: number): GridRow[] {
+  const openingLabelEn = "Opening Balance";
+  const closingLabelEn = "Closing Balance";
+  const openingLabelAr = "الرصيد بداية الشهر";
+  const closingLabelAr = "الرصيد نهاية الشهر";
+  return rows.map((row) => {
+    const isBalanceRow =
+      row.label === openingLabelEn ||
+      row.label === closingLabelEn ||
+      row.label === openingLabelAr ||
+      row.label === closingLabelAr;
+    if (!isBalanceRow) return row;
+    return {
+      ...row,
+      values: row.values.map((v) => (v != null ? v + deltaCash : v)),
+    };
+  });
+}
 
 function getMonths(isAr: boolean): string[] {
   return isAr
@@ -128,11 +180,53 @@ export default function ForecastPage() {
   const { profile } = useCompany();
   void profile;
   const { fmt, fmtAxis, selected: currCode } = useCurrency();
+  const {
+    scenarios,
+    activeScenarioId,
+    activeScenario,
+    removeScenario,
+    setActiveScenario,
+    clearAllScenarios,
+  } = useScenario();
   const isAr = locale === "ar";
+  const tenantId = getTenantId();
+  const { data: forecastData, loading: forecastLoading, error: forecastError } = useForecast(tenantId);
+
+  const [visibleScenarioIds, setVisibleScenarioIds] = useState<Set<string>>(new Set());
+  const prevScenariosLengthRef = useRef(0);
+  useEffect(() => {
+    if (scenarios.length > prevScenariosLengthRef.current) {
+      const added = scenarios.slice(prevScenariosLengthRef.current).map((s) => s.id);
+      setVisibleScenarioIds((prev) => {
+        const next = new Set(prev);
+        added.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+    prevScenariosLengthRef.current = scenarios.length;
+  }, [scenarios.length, scenarios]);
 
   const months = getMonths(isAr);
-  const chartData = getChartData(isAr);
-  const gridRows = getGridRows(isAr);
+  const baseForecastChartData = useMemo(() => getChartData(isAr), [isAr]);
+  const baseForecastGridRows = useMemo(() => getGridRows(isAr), [isAr]);
+
+  const scenarioForecastChartData = useMemo(
+    () =>
+      activeScenario
+        ? applyScenarioDeltaToChart(baseForecastChartData, activeScenario.deltaCash)
+        : baseForecastChartData,
+    [baseForecastChartData, activeScenario]
+  );
+  const scenarioForecastGridRows = useMemo(
+    () =>
+      activeScenario
+        ? applyScenarioDeltaToGridRows(baseForecastGridRows, activeScenario.deltaCash)
+        : baseForecastGridRows,
+    [baseForecastGridRows, activeScenario]
+  );
+
+  const chartData = activeScenario ? scenarioForecastChartData : baseForecastChartData;
+  const gridRows = activeScenario ? scenarioForecastGridRows : baseForecastGridRows;
 
   return (
     <div dir={dir} className="flex flex-col gap-5 p-5 md:p-6 overflow-y-auto h-full">
@@ -163,6 +257,165 @@ export default function ForecastPage() {
           </Button>
         </div>
       </div>
+
+      {/* ══ PRIMARY SCENARIO BANNER ══ */}
+      {scenarios.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-4 py-2.5">
+          <p className="text-sm text-muted-foreground">
+            {activeScenario
+              ? (isAr ? "الأساس للمقارنة: " : "Primary: ")
+                + scenarioTypeLabel(activeScenario.type, isAr)
+                + " · "
+                + (activeScenario.deltaCash >= 0 ? "+" : "") + fmt(activeScenario.deltaCash)
+              : isAr
+                ? "لا سيناريو أساسي محدد"
+                : "No primary scenario"}
+          </p>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={clearAllScenarios}>
+            <X className="h-3.5 w-3.5" />
+            {isAr ? "مسح الكل" : "Clear all"}
+          </Button>
+        </div>
+      )}
+
+      {/* ══ SCENARIO COMPARISON: Switcher + Chart + Summary ══ */}
+      {scenarios.length > 0 && (
+        <Card className="shadow-sm border-border/50">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <CardTitle className="text-base font-semibold">
+              {isAr ? "مقارنة السيناريوهات" : "Scenario comparison"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-4">
+            {/* Scenario Switcher */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant={activeScenarioId === null ? "secondary" : "outline"}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setActiveScenario(null)}
+              >
+                {isAr ? "الأساس" : "Base"}
+              </Button>
+              {scenarios.map((s, idx) => {
+                const letter = ["A", "B", "C"][idx] ?? String(idx + 1);
+                const label = isAr ? `السيناريو ${letter}` : `Scenario ${letter}`;
+                const visible = visibleScenarioIds.has(s.id);
+                const isPrimary = s.id === activeScenarioId;
+                return (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-1"
+                  >
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setVisibleScenarioIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(s.id)) next.delete(s.id);
+                        else next.add(s.id);
+                        return next;
+                      })}
+                      title={visible ? (isAr ? "إخفاء" : "Hide") : (isAr ? "إظهار" : "Show")}
+                    >
+                      {visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      variant={isPrimary ? "secondary" : "ghost"}
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setActiveScenario(isPrimary ? null : s.id)}
+                      title={isAr ? "تعيين كأساس للمقارنة" : "Set as primary comparison"}
+                    >
+                      <Star className={cn("h-3.5 w-3.5 mr-1", isPrimary && "fill-current")} />
+                      {label}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeScenario(s.id)}
+                      title={isAr ? "حذف" : "Delete"}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {forecastData && forecastData.forecast.length > 0 ? (
+              <ForecastChart
+                base={forecastData.forecast.map(p => p.baseline)}
+                scenarios={scenarios}
+                labels={forecastData.forecast.map(p => isAr ? `أسبوع ${p.week_number}` : `Week ${p.week_number}`)}
+                fmt={fmt}
+                fmtAxis={fmtAxis}
+                isAr={isAr}
+                currencyCode={currCode}
+                visibleScenarioIds={visibleScenarioIds}
+              />
+            ) : (
+              <div className="py-12 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {forecastLoading 
+                    ? (isAr ? "جاري تحميل التنبؤ..." : "Loading forecast...")
+                    : forecastError
+                    ? (isAr ? "خطأ في تحميل التنبؤ" : "Error loading forecast")
+                    : (isAr ? "لا توجد بيانات معاملات. قم برفع كشف حساب بنكي." : "No transaction data. Upload a bank statement.")}
+                </p>
+              </div>
+            )}
+
+            {/* Comparison Summary Card */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {scenarios.map((s, idx) => {
+                const letter = ["A", "B", "C"][idx] ?? String(idx + 1);
+                const title = isAr ? `السيناريو ${letter}` : `Scenario ${letter}`;
+                const worstWeek = s.newForecast.length > 0 ? Math.min(...s.newForecast) : 0;
+                const isPrimary = s.id === activeScenarioId;
+                return (
+                  <Card
+                    key={s.id}
+                    className={cn(
+                      "border-border/50",
+                      isPrimary && "ring-2 ring-emerald-500/40"
+                    )}
+                  >
+                    <CardHeader className="pb-1 pt-4 px-4">
+                      <CardTitle className="text-xs font-semibold flex items-center gap-1.5">
+                        {isPrimary && <Star className="h-3.5 w-3.5 fill-current text-emerald-500" />}
+                        {title}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-4 pb-4 space-y-1.5 text-xs">
+                      <p className="flex justify-between">
+                        <span className="text-muted-foreground">{isAr ? "فرق السيولة" : "Delta Cash"}</span>
+                        <span className="tabular-nums font-medium" dir="ltr">
+                          {s.deltaCash >= 0 ? "+" : ""}{fmt(s.deltaCash)}
+                        </span>
+                      </p>
+                      <p className="flex justify-between">
+                        <span className="text-muted-foreground">{isAr ? "أقل أسبوع" : "Worst Week Cash"}</span>
+                        <span className="tabular-nums font-medium" dir="ltr">{fmt(worstWeek)}</span>
+                      </p>
+                      <p className="flex justify-between">
+                        <span className="text-muted-foreground">{isAr ? "مستوى المخاطر" : "Risk Level"}</span>
+                        <span>{s.riskLevel}</span>
+                      </p>
+                      <p className="flex justify-between">
+                        <span className="text-muted-foreground">{isAr ? "الثقة" : "Confidence"}</span>
+                        <span className="tabular-nums">{s.confidence}%</span>
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ══ SPLIT VIEW ══ */}
       <div className="flex flex-col xl:flex-row gap-6 w-full max-w-[1600px] mx-auto">

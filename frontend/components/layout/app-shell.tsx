@@ -187,25 +187,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <MustasharCopilot />
       <GlobalReportDialog />
-      {/* Ask Mustashar FAB — opens command palette (Cmd+K) */}
-      <motion.button
-        type="button"
-        onClick={openCommandPalette}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-zinc-900 shadow-lg transition-colors hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-background"
-        style={{
-          background: "linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)",
-          boxShadow: "0 4px 24px rgba(16, 185, 129, 0.45), 0 0 0 1px rgba(255,255,255,0.1) inset",
-        }}
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        whileHover={{ scale: 1.03 }}
-        whileTap={{ scale: 0.98 }}
-        aria-label={isAr ? "اسأل مستشار" : "Ask Mustashar"}
-      >
-        <Sparkles className="h-4 w-4" />
-        <span>{isAr ? "اسأل مستشار" : "Ask Mustashar"}</span>
-      </motion.button>
     </div>
   );
 }

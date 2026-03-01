@@ -46,6 +46,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   AreaChart,
   Area,
+  CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
@@ -65,11 +66,18 @@ import { Amt } from "@/components/ui/amt";
 import { exportToCSV, formatForExport } from "@/lib/export";
 import { DashboardRightSidebar } from "@/components/dashboard/DashboardRightSidebar";
 import { RechartsTooltipGlass } from "@/components/charts/ChartTooltipGlass";
+import { chartGridProps, chartXAxisProps, chartTooltipCursor } from "@/components/charts/chartStyles";
+import type { CashEvolutionPoint } from "@/components/dashboard/CashEvolutionChart";
 import { cn } from "@/lib/utils";
 
 const CashFlowChart = dynamic(
   () => import("@/components/dashboard/CashFlowChart"),
   { ssr: false, loading: () => <Skeleton className="h-[430px] w-full rounded-xl" /> }
+);
+
+const CashEvolutionChart = dynamic(
+  () => import("@/components/dashboard/CashEvolutionChart").then((m) => m.default),
+  { ssr: false, loading: () => <Skeleton className="h-[340px] w-full rounded-xl" /> }
 );
 
 const VISIBLE_ACCOUNTS = 2;
@@ -150,6 +158,7 @@ const STORAGE_KEY = "dashboard-visible-sections";
 interface SectionVisibility {
   kpi: boolean;
   chart: boolean;
+  cashEvolution: boolean;
   banks: boolean;
   forecast: boolean;
   activity: boolean;
@@ -158,7 +167,7 @@ interface SectionVisibility {
 }
 
 const DEFAULT_VISIBILITY: SectionVisibility = {
-  kpi: true, chart: true, banks: true,
+  kpi: true, chart: true, cashEvolution: true, banks: true,
   forecast: true, activity: true, upcoming: true, performance: true,
 };
 
@@ -226,6 +235,56 @@ function getMockKpisForRange(
 }
 
 const RECENT_TX_LIMIT = 7;
+
+/** Deterministic mock data for Cash Evolution chart: Oct 2024 → Sep 2025 */
+function getCashEvolutionMockData(isAr: boolean): CashEvolutionPoint[] {
+  const months: { short: string; en: string; ar: string }[] = [
+    { short: "OCT 24", en: "October", ar: "أكتوبر" },
+    { short: "NOV 24", en: "November", ar: "نوفمبر" },
+    { short: "DEC 24", en: "December", ar: "ديسمبر" },
+    { short: "JAN 25", en: "January", ar: "يناير" },
+    { short: "FEB 25", en: "February", ar: "فبراير" },
+    { short: "MAR 25", en: "March", ar: "مارس" },
+    { short: "APR 25", en: "April", ar: "أبريل" },
+    { short: "MAY 25", en: "May", ar: "مايو" },
+    { short: "JUN 25", en: "June", ar: "يونيو" },
+    { short: "JUL 25", en: "July", ar: "يوليو" },
+    { short: "AUG 25", en: "August", ar: "أغسطس" },
+    { short: "SEP 25", en: "September", ar: "سبتمبر" },
+  ];
+  const years = [2024, 2024, 2024, 2025, 2025, 2025, 2025, 2025, 2025, 2025, 2025, 2025];
+  const inflowBase = [7_116_591, 8_200_000, 6_500_000, 9_100_000, 8_800_000, 9_439_436, 8_900_000, 9_500_000, 8_200_000, 9_800_000, 8_500_000, 9_200_000];
+  const outflowBase = [5_200_000, 6_100_000, 7_800_000, 5_900_000, 6_200_000, 4_754_000, 6_500_000, 6_800_000, 5_900_000, 7_100_000, 6_300_000, 6_600_000];
+  const out: CashEvolutionPoint[] = [];
+  let startBalance = 12_982_961;
+  for (let i = 0; i < months.length; i++) {
+    const inflow = inflowBase[i];
+    const outflow = outflowBase[i];
+    const endBalance = startBalance + inflow - outflow;
+    const netChange = endBalance - startBalance;
+    const investments = Math.round(endBalance * 0.028);
+    const totalEnd = endBalance + investments;
+    const inflowGap = Math.round(inflow * 0.97);
+    const outflowGap = Math.round(outflow * 1.76);
+    out.push({
+      month: isAr ? months[i].ar : months[i].en,
+      monthShort: months[i].short,
+      year: years[i],
+      balance: endBalance,
+      startBalance,
+      endBalance,
+      netChange,
+      investments,
+      totalEnd,
+      inflowExpected: inflow,
+      inflowGap,
+      outflowExpected: outflow,
+      outflowGap,
+    });
+    startBalance = endBalance;
+  }
+  return out;
+}
 
 export default function DashboardPage() {
   const { locale, dir, t } = useI18n();
@@ -351,6 +410,7 @@ export default function DashboardPage() {
                   {([
                     { key: "kpi" as const, label: d.sectionKpi },
                     { key: "chart" as const, label: d.sectionChart },
+                    { key: "cashEvolution" as const, label: d.sectionCashEvolution },
                     { key: "forecast" as const, label: d.sectionForecast },
                     { key: "banks" as const, label: d.sectionBanks },
                     { key: "activity" as const, label: d.sectionActivity },
@@ -569,6 +629,21 @@ export default function DashboardPage() {
             <CashFlowChart currency={curr} dateRange={dateRange} />
           </Card>
         )}
+        {sections.cashEvolution && (
+          <Card className="shadow-sm border-border/50 p-4">
+            <CardHeader className="pb-2 pt-1 px-0">
+              <CardTitle className="text-sm font-semibold">{d.sectionCashEvolution}</CardTitle>
+            </CardHeader>
+            <CardContent className="px-0 pb-0 pt-0">
+              <CashEvolutionChart
+                data={getCashEvolutionMockData(isAr)}
+                currency={curr}
+                fmt={fmt}
+                isAr={isAr}
+              />
+            </CardContent>
+          </Card>
+        )}
         {sections.forecast && (
           <Card className="shadow-sm border-border/50">
             <CardHeader className="pb-2 pt-5 px-5">
@@ -597,9 +672,10 @@ export default function DashboardPage() {
                         </feMerge>
                       </filter>
                     </defs>
-                    <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(240 3.8% 46.1%)" }} axisLine={false} tickLine={false} />
+                    <CartesianGrid {...chartGridProps} />
+                    <XAxis dataKey="day" {...chartXAxisProps} />
                     <YAxis hide domain={["dataMin - 10000", "dataMax + 10000"]} />
-                    <Tooltip content={<ForecastTooltip fmt={fmt} forecastData={forecastData} isAr={isAr} />} cursor={{ fill: "hsl(142 71% 45% / 0.12)", radius: 8 }} />
+                    <Tooltip content={<ForecastTooltip fmt={fmt} forecastData={forecastData} isAr={isAr} />} cursor={chartTooltipCursor} />
                     <Area
                       type="monotone"
                       dataKey="balance"

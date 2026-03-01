@@ -9,6 +9,7 @@ import { TenantProvider } from "@/lib/hooks/use-tenant";
 import { CompanyProvider } from "@/contexts/CompanyContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { EntityProvider } from "@/contexts/EntityContext";
+import { ScenarioProvider } from "@/contexts/ScenarioContext";
 import { TenantSegmentProvider } from "@/contexts/TenantSegmentContext";
 import { ToastProvider } from "@/components/ui/toast";
 import { CommandMenuProvider } from "@/lib/command-store";
@@ -38,12 +39,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
               <TenantSegmentProvider>
               <CurrencyProvider>
               <EntityProvider>
+              <ScenarioProvider>
               <ToastProvider>
                 <CommandMenuProvider>
                   <CommandPalette />
                   {children}
                 </CommandMenuProvider>
               </ToastProvider>
+              </ScenarioProvider>
               </EntityProvider>
               </CurrencyProvider>
               </TenantSegmentProvider>

@@ -96,6 +96,42 @@ export interface AuditLog {
   occurred_at: string;
 }
 
+export interface ServiceStatus {
+  name: string;
+  status: "operational" | "degraded" | "down";
+  response_time_ms: number;
+  last_check: string;
+}
+
+export interface SystemStatus {
+  services: ServiceStatus[];
+  uptime_percentage: number;
+  uptime_days: number;
+  last_backup: {
+    timestamp: string;
+    status: "success" | "failed" | "in_progress";
+    size_mb: number;
+  };
+}
+
+export interface TreasurySettings {
+  minimum_cash_floor: number;
+  liquidity_multiplier: number;
+  burn_spike_multiplier: number;
+  revenue_drop_threshold: number;
+  volatility_threshold: number;
+  updated_at?: string;
+  updated_by?: string;
+}
+
+export interface UpdateTreasurySettingsInput {
+  minimum_cash_floor: number;
+  liquidity_multiplier: number;
+  burn_spike_multiplier: number;
+  revenue_drop_threshold: number;
+  volatility_threshold: number;
+}
+
 // ── Ingestion Service Models ──────────────────────────────────
 export interface BankTransaction {
   id: string;
