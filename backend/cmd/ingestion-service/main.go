@@ -81,6 +81,7 @@ func run() error {
 
 	// Init repositories
 	userRepo := db.NewUserRepo(pool)
+	membershipRepo := db.NewMembershipRepo(pool)
 	auditRepo := db.NewAuditLogRepo(pool)
 	bankAccountRepo := db.NewBankAccountRepo(pool)
 	rawTxnRepo := db.NewRawBankTransactionRepo(pool)
@@ -108,12 +109,13 @@ func run() error {
 
 	// Build router
 	router := httpAdapter.NewIngestionRouter(httpAdapter.IngestionRouterDeps{
-		Validator: jwtValidator,
-		Users:     userRepo,
-		AuditRepo: auditRepo,
-		Ingestion: ingestionHandler,
-		Analysis:  analysisHandler,
-		Forecast:  forecastHandler,
+		Validator:   jwtValidator,
+		Users:       userRepo,
+		Memberships: membershipRepo,
+		AuditRepo:   auditRepo,
+		Ingestion:   ingestionHandler,
+		Analysis:    analysisHandler,
+		Forecast:    forecastHandler,
 	})
 
 	// Start command consumer (background goroutine)

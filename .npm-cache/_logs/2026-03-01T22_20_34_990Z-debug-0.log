@@ -1,0 +1,85 @@
+0 verbose cli /opt/homebrew/Cellar/node/25.3.0/bin/node /opt/homebrew/bin/npm
+1 info using npm@11.7.0
+2 info using node@v25.3.0
+3 silly config load:file:/opt/homebrew/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/adam/Desktop/tad/tadfuq-platform/frontend/.npmrc
+5 silly config load:file:/Users/adam/.npmrc
+6 silly config load:file:/Users/adam/Desktop/tad/tadfuq-platform/frontend/etc/npmrc
+7 verbose title npm install next@14.2.21
+8 verbose argv "install" "--prefix" "frontend" "next@14.2.21" "--no-audit" "--no-fund" "--prefer-offline"
+9 verbose logfile logs-max:10 dir:/Users/adam/Desktop/tad/tadfuq-platform/.npm-cache/_logs/2026-03-01T22_20_34_990Z-
+10 verbose logfile /Users/adam/Desktop/tad/tadfuq-platform/.npm-cache/_logs/2026-03-01T22_20_34_990Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 silly fetch manifest next@14.2.21
+15 silly packumentCache full:https://registry.npmjs.org/next cache-miss
+16 http fetch GET https://registry.npmjs.org/next attempt 1 failed with ENOTFOUND
+17 http fetch GET https://registry.npmjs.org/next attempt 2 failed with ENOTFOUND
+18 http fetch GET https://registry.npmjs.org/next attempt 3 failed with ENOTFOUND
+19 silly placeDep ROOT next@ REPLACE for: cashflow-frontend@0.1.0 want: 14.2.21
+20 warn ERESOLVE overriding peer dependency {
+20 warn ERESOLVE   code: 'ERESOLVE',
+20 warn ERESOLVE   edge: {
+20 warn ERESOLVE     type: 'peer',
+20 warn ERESOLVE     name: 'next',
+20 warn ERESOLVE     spec: '^12.2.5 || ^13 || ^14 || ^15 || ^16',
+20 warn ERESOLVE     from: {
+20 warn ERESOLVE       name: 'next-auth',
+20 warn ERESOLVE       version: '4.24.13',
+20 warn ERESOLVE       location: 'node_modules/next-auth',
+20 warn ERESOLVE       isWorkspace: false,
+20 warn ERESOLVE       dependents: [Array]
+20 warn ERESOLVE     }
+20 warn ERESOLVE   },
+20 warn ERESOLVE   dep: {
+20 warn ERESOLVE     name: 'next',
+20 warn ERESOLVE     version: undefined,
+20 warn ERESOLVE     errors: [ [FetchError] ],
+20 warn ERESOLVE     package: {},
+20 warn ERESOLVE     whileInstalling: {
+20 warn ERESOLVE       name: 'cashflow-frontend',
+20 warn ERESOLVE       version: '0.1.0',
+20 warn ERESOLVE       path: '/Users/adam/Desktop/tad/tadfuq-platform/frontend'
+20 warn ERESOLVE     },
+20 warn ERESOLVE     location: 'node_modules/next',
+20 warn ERESOLVE     isWorkspace: false,
+20 warn ERESOLVE     dependents: [ [Object] ]
+20 warn ERESOLVE   },
+20 warn ERESOLVE   force: false,
+20 warn ERESOLVE   isMine: true,
+20 warn ERESOLVE   strictPeerDeps: false,
+20 warn ERESOLVE   current: {
+20 warn ERESOLVE     name: 'next',
+20 warn ERESOLVE     version: '14.2.21',
+20 warn ERESOLVE     location: 'node_modules/next',
+20 warn ERESOLVE     isWorkspace: false,
+20 warn ERESOLVE     dependents: [ [Object], [Object] ]
+20 warn ERESOLVE   }
+20 warn ERESOLVE }
+21 verbose type system
+22 verbose stack FetchError: request to https://registry.npmjs.org/next failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+22 verbose stack     at ClientRequest.<anonymous> (/opt/homebrew/lib/node_modules/npm/node_modules/minipass-fetch/lib/index.js:130:14)
+22 verbose stack     at ClientRequest.emit (node:events:508:28)
+22 verbose stack     at emitErrorEvent (node:_http_client:108:11)
+22 verbose stack     at _destroy (node:_http_client:962:9)
+22 verbose stack     at onSocketNT (node:_http_client:982:5)
+22 verbose stack     at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+23 error code ENOTFOUND
+24 error syscall getaddrinfo
+25 error errno ENOTFOUND
+26 error network request to https://registry.npmjs.org/next failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+27 error network This is a problem related to network connectivity.
+27 error network In most cases you are behind a proxy or have bad network settings.
+27 error network
+27 error network If you are behind a proxy, please make sure that the
+27 error network 'proxy' config is set properly.  See: 'npm help config'
+28 silly unfinished npm timer reify 1772403635211
+29 silly unfinished npm timer reify:loadTrees 1772403635211
+30 verbose cwd /Users/adam/Desktop/tad/tadfuq-platform
+31 verbose os Darwin 25.3.0
+32 verbose node v25.3.0
+33 verbose npm  v11.7.0
+34 verbose exit 1
+35 verbose code 1
+36 error A complete log of this run can be found in: /Users/adam/Desktop/tad/tadfuq-platform/.npm-cache/_logs/2026-03-01T22_20_34_990Z-debug-0.log

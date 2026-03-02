@@ -44,8 +44,9 @@ Production-grade multi-tenant SaaS backend and Next.js frontend for **Tadfuq.ai*
 
 - **Row-level isolation**: Every tenant-scoped entity has a `tenant_id` foreign key
 - **Tenant context**: Resolved from JWT custom claim `tenant_id` or `X-Tenant-ID` header
-- **Middleware chain**: `KeycloakAuth → TenantFromHeader → ProvisionUser → RequirePermission`
-- Every API request within tenant scope is validated for membership
+- **Middleware chain**: `KeycloakAuth → TenantFromHeader → ProvisionUser → TenantFromRouteParam → RequireTenantMembership → RequirePermission`
+- Every API request within tenant scope is validated for membership and tenant-route consistency
+- **Rate limit**: 100 requests/minute per tenant on tenant-scoped routes (in-memory per service instance)
 
 ### AuthN/AuthZ
 

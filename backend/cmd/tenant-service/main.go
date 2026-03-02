@@ -92,12 +92,13 @@ func run() error {
 
 	// Build router
 	router := httpAdapter.NewRouter(httpAdapter.RouterDeps{
-		Validator: jwtValidator,
-		Users:     userRepo,
-		AuditRepo: auditRepo,
-		Tenants:   tenantHandler,
-		Members:   memberHandler,
-		Audit:     auditHandler,
+		Validator:   jwtValidator,
+		Users:       userRepo,
+		Memberships: membershipRepo,
+		AuditRepo:   auditRepo,
+		Tenants:     tenantHandler,
+		Members:     memberHandler,
+		Audit:       auditHandler,
 	})
 
 	// Start HTTP server
