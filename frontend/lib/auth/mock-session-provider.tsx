@@ -1,21 +1,64 @@
 "use client";
 
-import React from "react";
-import { SessionProvider as NextAuthSessionProvider } from "next-auth/react";
+import React, { createContext, useContext, useMemo } from "react";
+
+interface Session {
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  };
+  expires?: string;
+}
+
+interface SessionContextValue {
+  data: Session | null;
+  status: "authenticated" | "loading" | "unauthenticated";
+  update: (data?: any) => Promise<Session | null>;
+}
+
+const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
 /**
- * MockSessionProvider wraps NextAuthSessionProvider but doesn't require
- * a valid NextAuth backend. It allows useSession() to work without errors.
+ * MockSessionProvider provides a custom session context that mimics NextAuth's SessionProvider
+ * but doesn't require a backend. This allows useSession() to work without NextAuth API calls.
  * 
  * When DEV_SKIP_AUTH=true, this provider is used instead of the real SessionProvider.
- * The session will always be null/unauthenticated, which is what we want for dev mode.
  */
 export function MockSessionProvider({ children }: { children: React.ReactNode }) {
-  // We still use the real SessionProvider, but with session={null}
-  // This ensures useSession() works correctly throughout the app
-  return (
-    <NextAuthSessionProvider session={null} refetchInterval={0} refetchOnWindowFocus={false}>
-      {children}
-    </NextAuthSessionProvider>
+  const value = useMemo<SessionContextValue>(
+    () => ({
+      data: null,
+      status: "unauthenticated",
+      update: async () => null,
+    }),
+    []
   );
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+/**
+ * Custom useSession hook that works with MockSessionProvider
+ */
+export function useSession() {
+  const context = useContext(SessionContext);
+  if (context === undefined) {
+    throw new Error("useSession must be used within MockSessionProvider");
+  }
+  return context;
+}
+
+/**
+ * Mock signIn function that does nothing
+ */
+export function signIn() {
+  return Promise.resolve(undefined);
+}
+
+/**
+ * Mock signOut function that does nothing
+ */
+export function signOut() {
+  return Promise.resolve(undefined);
 }
