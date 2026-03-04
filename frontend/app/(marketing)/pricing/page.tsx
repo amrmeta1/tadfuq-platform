@@ -100,7 +100,7 @@ export default function PricingPage() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-xl text-zinc-600 mb-4"
           >
-            Choose the plan that's right for your business
+            Choose the plan that&apos;s right for your business
           </motion.p>
           <motion.p
             initial={{ opacity: 0, y: 20 }}
@@ -167,7 +167,7 @@ export default function PricingPage() {
                 {plan.features.map((feature, j) => (
                   <li key={j} className="flex items-start gap-3">
                     <Check className="w-5 h-5 text-neon flex-shrink-0 mt-0.5" />
-                    <span className="text-zinc-700">{feature}</span>
+                    <span className="text-zinc-600">{plan.period}</span>
                   </li>
                 ))}
               </ul>
@@ -200,7 +200,7 @@ export default function PricingPage() {
               Compare features
             </h2>
             <p className="text-xl text-zinc-600">
-              See what's included in each plan
+              See what&apos;s included in each plan
             </p>
           </motion.div>
 

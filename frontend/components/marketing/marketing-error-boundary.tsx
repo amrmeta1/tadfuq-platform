@@ -43,8 +43,8 @@ export class MarketingErrorBoundary extends Component<Props, State> {
             <h2 className="text-2xl font-bold text-white mb-2">
               Something went wrong
             </h2>
-            <p className="text-zinc-400 mb-6">
-              We're having trouble loading this section. Please refresh the page or try again later.
+            <p className="text-zinc-600 mb-6">
+              We&apos;re sorry, but something went wrong. Please try refreshing the page. or try again later.
             </p>
             <button
               onClick={() => window.location.reload()}

@@ -37,8 +37,8 @@ export function FinancialAnalysisSection() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="mt-12 p-6 bg-white rounded-xl shadow-sm"
           >
-            <p className="text-lg text-zinc-700 italic mb-4">
-              "A great product, simple to use, even for people with no financial background."
+            <p className="text-sm text-zinc-600 italic border-l-4 border-neon pl-4">
+              &ldquo;The insights dashboard is phenomenal. We spot trends instantly.&rdquo; for people with no financial background.&rdquo;
             </p>
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-zinc-300 rounded-full"></div>
