@@ -6,11 +6,19 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+const DEV_SKIP_AUTH = process.env.NEXT_PUBLIC_DEV_SKIP_AUTH === "true";
+
 export default function LoginPage() {
   const { status } = useSession();
   const router = useRouter();
 
   useEffect(() => {
+    // If DEV_SKIP_AUTH is enabled, redirect directly to dashboard
+    if (DEV_SKIP_AUTH) {
+      router.push("/app/dashboard");
+      return;
+    }
+    
     if (status === "authenticated") {
       router.push("/app/dashboard");
     }
