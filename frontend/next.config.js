@@ -2,9 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone', // Enable for Docker deployment
-  experimental: {
-    // Disable static page generation to avoid Context Provider issues
-    isrMemoryCacheSize: 0,
+  // Disable static optimization completely
+  generateBuildId: async () => {
+    return 'build-' + Date.now()
   },
   // Avoid "Unable to snapshot resolve dependencies" (webpack PackFileCacheStrategy) in dev
   webpack: (config, { dev }) => {
