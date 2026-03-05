@@ -49,6 +49,8 @@ spec:
           value: "require"
         - name: NATS_URL
           value: ""
+        - name: RABBITMQ_URL
+          value: ""
         - name: OTEL_ENABLED
           value: "false"
         - name: SERVER_PORT
