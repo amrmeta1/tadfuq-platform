@@ -4,7 +4,11 @@ import { motion } from "framer-motion";
 import { KyribaMainHero } from "@/components/marketing/kyriba-main-hero";
 import { CashFlowSection } from "@/components/marketing/cash-flow-section";
 import { FinancialAnalysisSection } from "@/components/marketing/financial-analysis-section";
+import { HeroSection } from "@/components/marketing/hero-section";
 import { ConnectSection } from "@/components/marketing/connect-section";
+
+// Disable static generation
+export const dynamic = 'force-dynamic';
 import { IntegrationsSection } from "@/components/marketing/integrations-section";
 import Link from "next/link";
 import { ArrowRight, Zap, Shield, TrendingUp, DollarSign } from "lucide-react";

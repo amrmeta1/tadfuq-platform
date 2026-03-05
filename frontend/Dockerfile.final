@@ -1,0 +1,33 @@
+# Simple production Dockerfile without static generation
+FROM node:18-alpine AS base
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Production image - run in development mode to avoid static generation
+FROM base AS runner
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Copy everything needed
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Change ownership
+RUN chown -R nextjs:nodejs /app
+
+USER nextjs
+EXPOSE 3000
+
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+# Run Next.js in production mode but without pre-building
+CMD ["npm", "start"]

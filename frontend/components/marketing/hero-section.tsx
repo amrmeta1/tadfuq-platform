@@ -108,7 +108,7 @@ export function HeroSection() {
           <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
           <span className="w-2.5 h-2.5 rounded-full bg-neon/80" />
-          <span className="ms-3 text-[10px] text-zinc-500 font-mono">app.tadfuq.ai/dashboard</span>
+          <span className="ms-3 text-[10px] text-zinc-500 font-mono">app.TadFuq.ai/dashboard</span>
         </div>
 
         <div className="p-5 flex flex-col gap-4 h-full">

@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     type: "website",
     locale: "en_SA",
     alternateLocale: ["ar_SA"],
-    url: "https://tadfuq.ai",
+    url: "https://TadFuq.ai",
     title: "Tadfuq.ai - AI-Powered Cash Flow Management for GCC",
     description: "The first AI-native CFO for the GCC. Predict cash flow, automate collections, and ensure ZATCA compliance.",
     siteName: "Tadfuq.ai",
@@ -58,10 +58,10 @@ export const metadata: Metadata = {
     creator: "@tadfuqai",
   },
   alternates: {
-    canonical: "https://tadfuq.ai",
+    canonical: "https://TadFuq.ai",
     languages: {
-      "en-SA": "https://tadfuq.ai",
-      "ar-SA": "https://tadfuq.ai/ar",
+      "en-SA": "https://TadFuq.ai",
+      "ar-SA": "https://TadFuq.ai/ar",
     },
   },
   verification: {

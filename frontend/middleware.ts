@@ -7,8 +7,8 @@ import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { TENANT_HEADER, TENANT_COOKIE } from "@/lib/tenant-constants";
 
-/** Base host (no subdomain) for tenant subdomain resolution, e.g. tadfuq.ai */
-const BASE_HOST = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "tadfuq.ai";
+/** Base host (no subdomain) for tenant subdomain resolution, e.g. TadFuq.ai */
+const BASE_HOST = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "TadFuq.ai";
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
@@ -16,7 +16,7 @@ export async function middleware(request: NextRequest) {
   // 1) Prefer tenant id from cookie (set by client when user switches tenant)
   let tenantId: string | null = request.cookies.get(TENANT_COOKIE)?.value ?? null;
 
-  // 2) If no cookie, try subdomain: client.tadfuq.ai or client.localhost -> slug "client"
+  // 2) If no cookie, try subdomain: client.TadFuq.ai or client.localhost -> slug "client"
   // Resolve slug -> tenant_id would require edge fetch to your API; for now we fall back to JWT/demo.
   const _slugFromHost = getTenantSlugFromHost(request.headers.get("host") ?? "");
 
