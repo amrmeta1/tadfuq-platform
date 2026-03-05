@@ -11,6 +11,22 @@ import { TENANT_HEADER, TENANT_COOKIE } from "@/lib/tenant-constants";
 const BASE_HOST = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "TadFuq.ai";
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Redirect root to /app/dashboard
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/app/dashboard', request.url));
+  }
+
+  // Skip middleware for static files and API routes
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
+  }
+
   const response = NextResponse.next();
 
   // 1) Prefer tenant id from cookie (set by client when user switches tenant)
