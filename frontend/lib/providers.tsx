@@ -32,6 +32,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // Simplified providers for DEV mode
+  if (DEV_SKIP_AUTH) {
+    return (
+      <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+        <MockSessionProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        </MockSessionProvider>
+      </ThemeProvider>
+    );
+  }
+
+  // Full providers for production
   const content = (
     <QueryClientProvider client={queryClient}>
       <I18nProvider>
@@ -57,11 +71,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 
-  const AuthWrapper = DEV_SKIP_AUTH ? MockSessionProvider : SessionProvider;
-
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <AuthWrapper>{content}</AuthWrapper>
+      <SessionProvider>{content}</SessionProvider>
     </ThemeProvider>
   );
 }
