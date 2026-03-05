@@ -1,14 +1,5 @@
-"use client";
-
-import { useEffect } from "react";
+import { redirect } from 'next/navigation';
 
 export default function RootPage() {
-  useEffect(() => {
-    // Force immediate redirect to /app/dashboard
-    if (typeof window !== 'undefined') {
-      window.location.replace("/app/dashboard");
-    }
-  }, []);
-  
-  return null;
+  redirect('/app/dashboard');
 }
