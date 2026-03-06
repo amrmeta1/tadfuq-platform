@@ -1,0 +1,26 @@
+# Production-specific values
+
+replicaCount: 3
+
+image:
+  pullPolicy: Always
+
+service:
+  type: LoadBalancer
+
+resources:
+  requests:
+    memory: "1Gi"
+    cpu: "500m"
+  limits:
+    memory: "2Gi"
+    cpu: "1000m"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 70
+
+env:
+  NODE_ENV: production
