@@ -1,6 +1,6 @@
 # Production-specific values
 
-replicaCount: 3
+replicaCount: 2
 
 image:
   pullPolicy: Always
@@ -10,17 +10,17 @@ service:
 
 resources:
   requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
     memory: "1Gi"
     cpu: "500m"
-  limits:
-    memory: "2Gi"
-    cpu: "1000m"
 
 autoscaling:
   enabled: true
-  minReplicas: 3
-  maxReplicas: 15
+  minReplicas: 2
+  maxReplicas: 10
   targetCPUUtilizationPercentage: 70
 
 env:
-  NODE_ENV: production
+  NODE_ENV: development
