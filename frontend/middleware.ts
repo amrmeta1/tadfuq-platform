@@ -1,10 +1,9 @@
 /**
- * Multi-tenant middleware: detect tenant from subdomain, custom domain, or JWT.
+ * Multi-tenant middleware: detect tenant from subdomain, custom domain, or cookie.
  * Uses constants from lib/tenant-constants (no next/headers here — Edge-safe).
  */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getToken } from "next-auth/jwt";
 import { TENANT_HEADER, TENANT_COOKIE } from "@/lib/tenant-constants";
 
 /** Base host (no subdomain) for tenant subdomain resolution, e.g. TadFuq.ai */
@@ -13,9 +12,9 @@ const BASE_HOST = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "TadFuq.ai";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Redirect root to /app/dashboard
+  // Redirect root to /home
   if (pathname === '/') {
-    return NextResponse.redirect(new URL('/app/dashboard', request.url));
+    return NextResponse.redirect(new URL('/home', request.url));
   }
 
   // Skip middleware for static files and API routes
@@ -33,20 +32,10 @@ export async function middleware(request: NextRequest) {
   let tenantId: string | null = request.cookies.get(TENANT_COOKIE)?.value ?? null;
 
   // 2) If no cookie, try subdomain: client.TadFuq.ai or client.localhost -> slug "client"
-  // Resolve slug -> tenant_id would require edge fetch to your API; for now we fall back to JWT/demo.
   const _slugFromHost = getTenantSlugFromHost(request.headers.get("host") ?? "");
 
-  // 3) Fall back to JWT (Keycloak session tenant_id)
+  // 3) Default to demo tenant
   if (!tenantId) {
-    const token = await getToken({
-      req: request,
-      secret: process.env.NEXTAUTH_SECRET,
-      secureCookie: process.env.NODE_ENV === "production",
-    });
-    tenantId = token?.tenantId ?? null;
-  }
-
-  if (!tenantId && process.env.NODE_ENV !== "production") {
     tenantId = "demo";
   }
 
@@ -79,9 +68,9 @@ function getTenantSlugFromHost(host: string): string | null {
 export const config = {
   matcher: [
     /*
-     * Match all app paths (and API if you want tenant on API routes).
+     * Match all app paths.
      * Exclude static files and _next.
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/auth).*)",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };
