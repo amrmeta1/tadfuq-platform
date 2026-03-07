@@ -2,6 +2,16 @@
 
 Production-grade multi-tenant SaaS backend and Next.js frontend for **TadFuq.ai** (marketing) / **CashFlow.ai** (app), an agentic financial management platform targeting GCC SMEs (Saudi Arabia, Qatar, UAE).
 
+> **⚠️ Current Status**: Authentication removed, infrastructure destroyed for cost optimization. See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for details.
+
+## Quick Links
+
+- 📚 **[Documentation](./docs/)** - Architecture, Deployment, Development guides
+- 🤝 **[Contributing](./CONTRIBUTING.md)** - Contribution guidelines
+- 🏗️ **[Architecture](./docs/ARCHITECTURE.md)** - System design and patterns
+- 🚀 **[Deployment](./docs/DEPLOYMENT.md)** - Infrastructure and deployment
+- 💻 **[Development](./docs/DEVELOPMENT.md)** - Local setup and workflow
+
 ## Architecture Overview
 
 ```
@@ -543,52 +553,9 @@ DB_PORT=5433 make run-ingestion
 
 ### 2. تجربة من الـ API (Backend)
 
-1. شغّل البنية التحتية والـ tenant-service: `make up-deps` ثم `make run`.
-2. احصل على توكن:
-   ```bash
-   TOKEN=$(make keycloak-token)
-   ```
-   (هذا يستخدم المستخدم الافتراضي `admin@demo.com` إن وُجد في الـ realm.)
-3. استدعِ مسارات محمية بصلاحيات:
-   ```bash
-   # قراءة الملف الشخصي (أي مستخدم مصادق)
-   curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/me | jq
+> **⚠️ ملاحظة:** Authentication تم إزالته من المشروع. الأمثلة أدناه للمرجع التاريخي فقط.
 
-   # إنشاء tenant (يحتاج tenant:create — مثلاً tenant_admin أو owner)
-   curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-     -d '{"name":"Test Org","slug":"test-org"}' http://localhost:8080/tenants | jq
-
-   # سجل التدقيق (يحتاج audit:read + X-Tenant-ID)
-   curl -s -H "Authorization: Bearer $TOKEN" -H "X-Tenant-ID: <tenant-uuid>" \
-     http://localhost:8080/audit-logs | jq
-   ```
-4. لمقارنة الأدوار: أنشئ في Keycloak مستخدمين بدوار مختلفة، احصل لكل واحد على توكن (بـ username/password عبر `/protocol/openid-connect/token`) ثم أعد الاستدعاءات أعلاه — المسارات المحمية بصلاحية سترجع `403 Forbidden` إن لم يكن للدور الصلاحية المطلوبة.
-
-### 3. أمثلة cURL: توكن + معاملات (Ingestion)
-
-- **توكن:** يُستخرج من **Keycloak** على المنفذ **8180** (وليس 8080). استخدم `make keycloak-token` أو:
-
-  ```bash
-  TOKEN=$(curl -s -X POST "http://localhost:8180/realms/cashflow/protocol/openid-connect/token" \
-    -d "client_id=cashflow-api" \
-    -d "client_secret=cashflow-api-secret" \
-    -d "username=admin@demo.com" \
-    -d "password=admin123" \
-    -d "grant_type=password" | jq -r '.access_token')
-  ```
-
-- **قائمة المعاملات (Ingestion على 8081):** تحتاج `tenant_id` (UUID). مستخدمو الـ realm الافتراضي لهم `tenant_id` في الـ claim = `00000000-0000-0000-0000-000000000001`؛ أو أنشئ tenant من الـ tenant-service ثم استخدم الـ ID المُرجَع.
-
-  ```bash
-  TENANT_ID="00000000-0000-0000-0000-000000000001"
-
-  curl -s -H "Authorization: Bearer $TOKEN" \
-    "http://localhost:8081/tenants/${TENANT_ID}/transactions?limit=20" | jq '.data[] | {date, description, amount}'
-  ```
-
-  (الاستجابة من الـ API بصيغة `{ "data": [ ... ], "meta": { ... } }` لذلك استخدم `.data[]` في jq.)
-
-- **استيراد CSV بنكي (Ingestion على 8081):** تحتاج `tenant_id` و `account_id` (UUID لحساب بنكي). أنشئ حساباً من `POST /tenants/{tenantId}/bank-accounts` إن لم يكن لديك، ثم:
+للتفاصيل الكاملة عن التطوير المحلي، راجع [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md).
 
   ```bash
   TENANT_ID="00000000-0000-0000-0000-000000000001"
