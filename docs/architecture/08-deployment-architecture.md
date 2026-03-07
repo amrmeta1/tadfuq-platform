@@ -2,9 +2,9 @@
 
 ## Environment
 
-- Frontend: Vercel
-- Backend: Docker (VPS / ECS)
-- Database: PostgreSQL (Managed)
+- Frontend: Kubernetes/EKS
+- Backend: Kubernetes/EKS
+- Database: PostgreSQL (RDS)
 - Backups: Daily pg_dump → S3
 - Monitoring: Sentry + UptimeRobot
 

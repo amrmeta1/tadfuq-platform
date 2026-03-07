@@ -369,7 +369,7 @@ aws ecs update-service \
 3. **CI/CD**: Setup GitHub Actions for automated deployment
 4. **Monitoring**: Configure CloudWatch Dashboards
 5. **Alerting**: Setup SNS notifications
-6. **Frontend**: Deploy Next.js on Vercel or Amplify
+6. **Frontend**: Deploy Next.js on EKS with Kubernetes
 
 ## Support
 

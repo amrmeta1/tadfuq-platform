@@ -369,7 +369,7 @@ aws ecs update-service \
 3. **CI/CD**: إعداد GitHub Actions للنشر التلقائي
 4. **Monitoring**: إعداد CloudWatch Dashboards
 5. **Alerting**: إعداد SNS notifications
-6. **Frontend**: نشر Next.js على Vercel أو Amplify
+6. **Frontend**: نشر Next.js على EKS مع Kubernetes
 
 ## الدعم
 
