@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: me-south-1
+  AWS_REGION: us-east-1
   TERRAFORM_VERSION: 1.5.0
 
 permissions:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy to AWS ECS
+    name: Deploy to AWS EKS
     runs-on: ubuntu-latest
     environment: dev
     
@@ -77,43 +77,43 @@ jobs:
         working-directory: ./infra/terraform
         run: terraform apply -auto-approve tfplan
 
-      - name: Update ECS Services
+      - name: Configure kubectl
         run: |
-          aws ecs update-service \
-            --cluster cashflow-dev-cluster \
-            --service cashflow-dev-tenant \
-            --force-new-deployment \
-            --region ${{ env.AWS_REGION }}
-          
-          aws ecs update-service \
-            --cluster cashflow-dev-cluster \
-            --service cashflow-dev-ingestion \
-            --force-new-deployment \
+          aws eks update-kubeconfig \
+            --name cashflow-dev-cluster \
             --region ${{ env.AWS_REGION }}
 
-      - name: Wait for services to stabilize
+      - name: Update Kubernetes deployments
         run: |
-          aws ecs wait services-stable \
-            --cluster cashflow-dev-cluster \
-            --services cashflow-dev-tenant cashflow-dev-ingestion \
-            --region ${{ env.AWS_REGION }}
+          kubectl set image deployment/tenant-service \
+            tenant-service=${{ steps.login-ecr.outputs.registry }}/cashflow/tenant-service:${{ github.sha }} \
+            -n default
+          
+          kubectl set image deployment/ingestion-service \
+            ingestion-service=${{ steps.login-ecr.outputs.registry }}/cashflow/ingestion-service:${{ github.sha }} \
+            -n default
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/tenant-service -n default --timeout=5m
+          kubectl rollout status deployment/ingestion-service -n default --timeout=5m
 
       - name: Get deployment info
         id: deployment-info
-        working-directory: ./infra/terraform
         run: |
-          echo "alb_url=$(terraform output -raw alb_url)" >> $GITHUB_OUTPUT
-          echo "tenant_endpoint=$(terraform output -raw tenant_service_endpoint)" >> $GITHUB_OUTPUT
+          TENANT_LB=$(kubectl get svc tenant-service -n default -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "tenant_endpoint=http://${TENANT_LB}" >> $GITHUB_OUTPUT
 
       - name: Health check
         run: |
-          curl -f ${{ steps.deployment-info.outputs.alb_url }}/healthz || exit 1
+          sleep 30
+          curl -f ${{ steps.deployment-info.outputs.tenant_endpoint }}/health || exit 1
 
       - name: Deployment summary
         run: |
           echo "## Deployment Successful! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Load Balancer**: ${{ steps.deployment-info.outputs.alb_url }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Tenant Service**: ${{ steps.deployment-info.outputs.tenant_endpoint }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Region**: ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cluster**: cashflow-dev-cluster" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

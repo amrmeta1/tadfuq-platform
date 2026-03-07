@@ -44,19 +44,21 @@ jobs:
           go-version: "1.22"
 
       - name: Run migrations
+        working-directory: ./backend
         run: |
           for f in migrations/*.up.sql; do
             psql "postgres://cashflow:cashflow@localhost:5432/cashflow?sslmode=disable" -f "$f"
           done
 
       - name: Run tests
+        working-directory: ./backend
         run: go test -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage.out
+          path: backend/coverage.out
 
   lint:
     name: Lint
@@ -72,6 +74,7 @@ jobs:
         uses: golangci/golangci-lint-action@v4
         with:
           version: v1.56
+          working-directory: ./backend
 
   build:
     name: Build Docker Images
@@ -81,9 +84,9 @@ jobs:
       matrix:
         include:
           - service: tenant-service
-            dockerfile: deploy/docker/Dockerfile
+            dockerfile: infra/docker/Dockerfile
           - service: ingestion-service
-            dockerfile: deploy/docker/Dockerfile.ingestion
+            dockerfile: infra/docker/Dockerfile.ingestion
     steps:
       - uses: actions/checkout@v4
 
