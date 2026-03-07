@@ -17,7 +17,7 @@ Production-grade multi-tenant SaaS backend and Next.js frontend for **TadFuq.ai*
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        API Gateway / LB                          │
-│                 (X-Tenant-ID header fallback)                    │
+│                 (X-Tenant-ID header)                             │
 └───────────┬──────────────────────────────┬──────────────────────┘
             │ :8080                         │ :8081
 ┌───────────▼───────────┐     ┌────────────▼────────────────────┐
@@ -28,10 +28,10 @@ Production-grade multi-tenant SaaS backend and Next.js frontend for **TadFuq.ai*
 │                       │     │  Command Consumer Worker         │
 └───────────┬───────────┘     └──┬──────────────┬───────────────┘
             │                    │              │
-  ┌─────────▼─────────┐  ┌──────▼────┐  ┌─────▼──────────────┐
-  │  PostgreSQL 16     │  │ Keycloak  │  │  RabbitMQ 3.13     │
-  │  (multi-tenant)    │  │ 24 (OIDC) │  │  (events+commands) │
-  └────────────────────┘  └───────────┘  └────────────────────┘
+  ┌─────────▼─────────┐  ┌──────▼────────┐  ┌─▼──────────────┐
+  │  PostgreSQL 16     │  │ NATS JetStream│  │ RabbitMQ 3.13  │
+  │  (multi-tenant)    │  │  (events)     │  │  (commands)    │
+  └────────────────────┘  └───────────────┘  └────────────────┘
 ```
 
 ### Clean Architecture Layers
@@ -46,27 +46,23 @@ Production-grade multi-tenant SaaS backend and Next.js frontend for **TadFuq.ai*
 | **Adapter/HTTP** | `internal/adapter/http` | chi router, handlers, response helpers |
 | **Adapter/DB** | `internal/adapter/db` | PostgreSQL repository implementations (pgx) |
 | **Integrations** | `internal/adapter/integrations` | Bank/Accounting provider interfaces + stubs |
-| **Middleware** | `internal/middleware` | Keycloak JWT auth, tenant resolution, user provisioning, RBAC |
+| **Middleware** | `internal/middleware` | Tenant resolution, logging, RBAC (auth removed) |
 | **Config** | `internal/config` | Environment-based configuration (envconfig) |
 | **Observability** | `internal/observability` | OpenTelemetry tracer initialization |
 
 ### Multi-Tenancy Model
 
 - **Row-level isolation**: Every tenant-scoped entity has a `tenant_id` foreign key
-- **Tenant context**: Resolved from JWT custom claim `tenant_id` or `X-Tenant-ID` header
-- **Middleware chain**: `KeycloakAuth → TenantFromHeader → ProvisionUser → TenantFromRouteParam → RequireTenantMembership → RequirePermission`
-- Every API request within tenant scope is validated for membership and tenant-route consistency
+- **Tenant context**: Resolved from `X-Tenant-ID` header
+- **Middleware chain**: `TenantFromHeader → TenantFromRouteParam`
+- Every API request within tenant scope uses tenant ID for data isolation
 - **Rate limit**: 100 requests/minute per tenant on tenant-scoped routes (in-memory per service instance)
 
-### AuthN/AuthZ
+### Authentication & Authorization
 
-- **Identity Provider**: Keycloak (OIDC) — all authentication handled externally
-- **JWT validation**: RS256 signatures verified via JWKS endpoint with key caching
-- **User provisioning**: Automatic upsert from JWT claims (sub, email) on first request
-- **RBAC roles** (Keycloak client roles): `tenant_admin`, `owner`, `finance_manager`, `accountant_readonly`
-- **Permission matrix**: Roles map to fine-grained permissions (`tenant:create`, `member:add`, etc.)
-- **Enforcement**: Both middleware-level (`RequirePermission`) and usecase-level checks
-- **No local password auth** — users authenticate via Keycloak's token endpoint
+> **⚠️ Note**: Authentication has been removed from this project. All endpoints are currently accessible without authentication.
+> 
+> Previously used Keycloak OIDC for authentication. Auth middleware code remains in codebase for reference but is not actively used.
 
 ### RabbitMQ Event & Command Backbone (Ingestion Service)
 
@@ -100,10 +96,10 @@ Production-grade multi-tenant SaaS backend and Next.js frontend for **TadFuq.ai*
 
 ### Audit & Compliance
 
-Every security-relevant event is captured in `audit_logs` with `actor_sub` (Keycloak subject):
+Every security-relevant event is captured in `audit_logs`:
 - Tenant creation/update/deletion
 - Member added/removed, role changes
-- Token validation failures
+- API access events
 - Access denied events
 
 ## Repository Structure
@@ -126,15 +122,16 @@ cashflow/
 │   │   ├── db/                  # PostgreSQL repositories
 │   │   ├── mq/                  # RabbitMQ publisher, consumer, topology
 │   │   └── integrations/        # Bank/Accounting provider interfaces + stubs
-│   ├── middleware/               # Keycloak JWT, RBAC, tenant, user provisioning
+│   ├── middleware/               # Tenant resolution, logging, RBAC (auth removed)
 │   ├── config/                  # Env-based config (tenant + ingestion)
 │   └── observability/           # OpenTelemetry setup
 ├── migrations/                  # golang-migrate SQL files
 ├── openapi/                     # OpenAPI specs (openapi.yaml, ingestion.yaml)
-├── deploy/
+├── infra/
 │   ├── docker/                  # Dockerfiles + docker-compose
-│   ├── keycloak/                # Keycloak realm export JSON
-│   └── terraform/               # AWS infrastructure skeleton
+│   ├── helm/                    # Kubernetes Helm charts
+│   ├── scripts/                 # Deployment scripts
+│   └── terraform/               # AWS infrastructure (EKS, RDS, VPC)
 ├── .github/workflows/           # CI pipeline
 ├── Makefile                     # Dev commands
 └── .env.example                 # Configuration template
@@ -161,15 +158,15 @@ cashflow/
 ### 1. Start infrastructure
 
 ```bash
-# Start all infra (postgres, keycloak, nats, rabbitmq)
+# Start all infra (postgres, nats, rabbitmq)
 make up-deps
 
 # Or start everything including both services
 make up
 ```
 
-- **Keycloak admin console**: http://localhost:8180 (`admin` / `admin`)
 - **RabbitMQ management UI**: http://localhost:15672 (`guest` / `guest`)
+- **NATS monitoring**: http://localhost:8222
 
 ### 2. Run migrations
 
@@ -197,26 +194,22 @@ make run-ingestion
 # Health check
 curl http://localhost:8080/healthz
 
-# Get a Keycloak access token (test user: admin@demo.com / admin123)
-TOKEN=$(make keycloak-token)
-
-# Create a tenant
+# Create a tenant (no auth required)
 curl -X POST http://localhost:8080/tenants \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: demo-tenant" \
   -d '{"name": "Finch Capital", "slug": "finch-capital"}'
 ```
 
 ### 5. Test Ingestion Service — CSV Import End-to-End
 
 ```bash
-TOKEN=$(make keycloak-token)
 TENANT_ID="<tenant-id-from-step-4>"
 
 # 1. Register a bank account
 curl -X POST "http://localhost:8081/tenants/$TENANT_ID/bank-accounts" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: $TENANT_ID" \
   -d '{"nickname": "SNB Main Account", "currency": "SAR", "provider": "manual"}'
 
 # Note the account ID from the response
@@ -234,7 +227,7 @@ EOF
 
 # 3. Upload CSV
 curl -X POST "http://localhost:8081/tenants/$TENANT_ID/imports/bank-csv" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: $TENANT_ID" \
   -F "account_id=$ACCOUNT_ID" \
   -F "file=@/tmp/transactions.csv"
 
@@ -242,11 +235,11 @@ curl -X POST "http://localhost:8081/tenants/$TENANT_ID/imports/bank-csv" \
 
 # 4. Query transactions
 curl "http://localhost:8081/tenants/$TENANT_ID/transactions?from=2024-01-01&to=2024-12-31" \
-  -H "Authorization: Bearer $TOKEN"
+  -H "X-Tenant-ID: $TENANT_ID"
 
 # 5. Re-upload the same CSV (deduplication test — should show 0 inserted, 5 duplicates)
 curl -X POST "http://localhost:8081/tenants/$TENANT_ID/imports/bank-csv" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: $TENANT_ID" \
   -F "account_id=$ACCOUNT_ID" \
   -F "file=@/tmp/transactions.csv"
 ```
@@ -256,7 +249,7 @@ curl -X POST "http://localhost:8081/tenants/$TENANT_ID/imports/bank-csv" \
 ```bash
 # Enqueue a bank sync command (stub — completes immediately)
 curl -X POST "http://localhost:8081/tenants/$TENANT_ID/sync/bank" \
-  -H "Authorization: Bearer $TOKEN"
+  -H "X-Tenant-ID: $TENANT_ID"
 
 # Enqueue an accounting sync command
 curl -X POST "http://localhost:8081/tenants/$TENANT_ID/sync/accounting" \
@@ -283,9 +276,9 @@ curl -X POST "http://localhost:8081/tenants/$TENANT_ID/sync/accounting" \
 
 | Command | Description |
 |---------|-------------|
-| `make up` | Start all containers (postgres, keycloak, nats, rabbitmq, services) |
+| `make up` | Start all containers (postgres, nats, rabbitmq, services) |
 | `make down` | Stop and remove containers |
-| `make up-deps` | Start infra only (postgres, keycloak, nats, rabbitmq) |
+| `make up-deps` | Start infra only (postgres, nats, rabbitmq) |
 | `make run` | Run tenant-service locally (:8080) |
 | `make run-ingestion` | Run ingestion-service locally (:8081) |
 | `make run-worker` | Run example NATS consumer worker |
@@ -300,7 +293,6 @@ curl -X POST "http://localhost:8081/tenants/$TENANT_ID/sync/accounting" \
 | `make docker-build` | Build tenant-service Docker image |
 | `make docker-build-ingestion` | Build ingestion-service Docker image |
 | `make docker-build-all` | Build all Docker images |
-| `make keycloak-token` | Get test access token |
 
 ## API Documentation
 
@@ -393,7 +385,7 @@ Each transaction gets a **deterministic SHA-256 hash** computed from: `account_i
 - **Alert Service** — Threshold-based notifications
 - **AI Orchestration** — LLM-based financial insights agent
 
-Services communicate via RabbitMQ events and share tenant identity context via Keycloak JWT propagation.
+Services communicate via RabbitMQ events and NATS JetStream, sharing tenant identity context via headers.
 
 ## Tech Stack
 
@@ -403,10 +395,9 @@ Services communicate via RabbitMQ events and share tenant identity context via K
 | HTTP Router | chi/v5 |
 | Database | PostgreSQL 16 |
 | DB Driver | pgx/v5 |
-| Identity Provider | Keycloak 24 (OIDC / RS256) |
-| JWT Validation | JWKS (golang-jwt/v5) |
 | Message Queue | RabbitMQ 3.13 (amqp091-go) |
 | Event Backbone | NATS JetStream (tenant-service) |
+| Container Orchestration | Kubernetes (EKS) |
 | Migrations | golang-migrate |
 | Config | envconfig |
 | Logging | zerolog |
@@ -442,7 +433,7 @@ Services communicate via RabbitMQ events and share tenant identity context via K
 
 | الخطوة | الأمر | ماذا يفعل |
 |--------|--------|-----------|
-| **1** | `docker compose -f deploy/docker/docker-compose.yml up -d` | يشغّل الحاويات: Postgres (5433)، Keycloak (8180)، NATS، RabbitMQ، tenant-service (8080)، ingestion-service (8081). إذا ظهر خطأ `port 8080` أو `8081 already in use` أوقف أي عملية محلية تستخدمها. |
+| **1** | `docker compose -f infra/docker/docker-compose.yml up -d` | يشغّل الحاويات: Postgres (5433)، NATS، RabbitMQ، tenant-service (8080)، ingestion-service (8081). إذا ظهر خطأ `port 8080` أو `8081 already in use` أوقف أي عملية محلية تستخدمها. |
 | **2** | `make migrate` | يطبّق migrations على قاعدة البيانات (مرة واحدة بعد أول `up`). |
 | **3** | `DB_PORT=5433 make run` | يشغّل **tenant-service** محلياً على :8080 (يحتاج المنفذ 8080 حراً). |
 | **4** | `DB_PORT=5433 make run-ingestion` | يشغّل **ingestion-service** محلياً على :8081 (في طرفية ثانية؛ يحتاج 8081 حراً). |
@@ -454,7 +445,7 @@ Services communicate via RabbitMQ events and share tenant identity context via K
 **بديل: تشغيل البنية التحتية فقط ثم الخدمات محلياً**  
 لتجنب تعارض المنافذ 8080 و 8081:
 ```bash
-docker compose -f deploy/docker/docker-compose.yml up -d postgres keycloak nats rabbitmq
+docker compose -f infra/docker/docker-compose.yml up -d postgres nats rabbitmq
 make migrate
 # ثم في طرفيتين منفصلتين:
 DB_PORT=5433 make run
@@ -514,32 +505,15 @@ DB_PORT=5433 make run-ingestion
 - **اسأل مستشار (Command Palette):** من أي صفحة داخل التطبيق يمكنك الضغط **Cmd+K** (أو Ctrl+K) أو النقر على زر **اسأل مستشار** الأخضر أسفل يمين الشاشة لفتح قائمة الأوامر: تنقل سريع، إجراءات (استيراد، تقارير، تصدير PDF)، وأوامر الذكاء الاصطناعي (رقيب، متوقع، مستشار). اختيار أمر AI يفتح محادثة مستشار مع السؤال مملوء مسبقاً.
 - إذا استمرت المشكلة: افتح أدوات المطوّر (F12) → تبويب Console وانسخ أي رسالة خطأ باللون الأحمر.
 
-### Keycloak لا ينقل بعد Sign in
+### مشاكل الاتصال بالـ API
 
-- **NEXTAUTH_URL:** في `frontend/.env` يجب أن يساوي **نفس الرابط** الذي تفتح فيه الموقع في المتصفح. إذا فتحت `http://127.0.0.1:3000` فضع `NEXTAUTH_URL=http://127.0.0.1:3000`؛ إذا `http://localhost:3000` فضع `NEXTAUTH_URL=http://localhost:3000`.
-- **NEXTAUTH_SECRET:** يجب أن يكون معرّفاً (سطر غير فارغ)، وإلا قد يفشل التوجيه بعد تسجيل الدخول.
-- **Redirect URIs في Keycloak:** الـ realm المستورد يتضمّن `http://localhost:3000/api/auth/callback/keycloak` ونسخة `127.0.0.1`. إذا كان Keycloak قديم أو تم تعديله يدوياً: من لوحة Keycloak (http://localhost:8180) → Realm **cashflow** → Clients → **cashflow-api** → تبويب **Settings** → تأكد أن **Valid redirect URIs** تحتوي على:
-  - `http://localhost:3000/*` أو على الأقل `http://localhost:3000/api/auth/callback/keycloak`
-  - وإذا كنت تستخدم 127.0.0.1: `http://127.0.0.1:3000/*` أو `http://127.0.0.1:3000/api/auth/callback/keycloak`
-- **Web origins:** في نفس الصفحة تأكد أن **Web origins** تحتوي على `http://localhost:3000` أو `http://127.0.0.1:3000` حسب ما تستخدمه.
-- بعد أي تعديل على الـ realm: أعد تشغيل Keycloak أو أعد استيراد الـ realm من `deploy/keycloak/realm-export.json`.
+- تأكد أن الـ backend services شغالة على المنافذ الصحيحة (8080, 8081)
+- تحقق من `NEXT_PUBLIC_API_URL` في ملف `.env` للـ frontend
+---
 
-## Testing RBAC — تجربة الصلاحيات
+## ملاحظات إضافية
 
-### 1. تجربة من الواجهة (Frontend)
-
-**أ) بدون تسجيل دخول (أدوار ثابتة):**
-
-- في `frontend/.env` ضع `NEXT_PUBLIC_DEV_SKIP_AUTH=true`.
-- شغّل الواجهة: `cd frontend && npm run dev`.
-- ادخل على `/app/dashboard` — ستُعامل كـ `tenant_admin` + `owner` (ترى كل القوائم والإعدادات).
-
-**ب) مع Keycloak (أدوار حقيقية):**
-
-1. شغّل البنية التحتية: `make up-deps` (يشغّل Postgres + Keycloak + NATS + RabbitMQ).
-2. انتظر Keycloak حتى يجهز الـ realm (من الـ import)، ثم شغّل الـ tenant-service: `make run` (أو عبر Docker).
-3. في `frontend/.env`: **أزل أو عطّل** `NEXT_PUBLIC_DEV_SKIP_AUTH` (أو ضعها `false`)، وضبط:
-   - `KEYCLOAK_ISSUER=http://localhost:8180/realms/cashflow`
+> **⚠️ ملاحظة:** تم إزالة نظام المصادقة (Authentication) من المشروع. جميع endpoints متاحة بدون الحاجة لتسجيل دخول.
    - `KEYCLOAK_CLIENT_ID=cashflow-api`
    - `KEYCLOAK_CLIENT_SECRET=cashflow-api-secret`
    - `NEXTAUTH_URL=http://localhost:3000`
