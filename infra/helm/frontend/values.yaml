@@ -90,7 +90,8 @@ env:
 secrets:
 
 livenessProbe:
-  tcpSocket:
+  httpGet:
+    path: /api/health
     port: 3000
   initialDelaySeconds: 60
   periodSeconds: 20
@@ -98,7 +99,8 @@ livenessProbe:
   failureThreshold: 5
 
 readinessProbe:
-  tcpSocket:
+  httpGet:
+    path: /api/health
     port: 3000
   initialDelaySeconds: 30
   periodSeconds: 10
