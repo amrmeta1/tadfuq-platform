@@ -29,29 +29,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <QueryClientProvider client={queryClient}>
-        <I18nProvider>
-          <TenantProvider>
-            <CompanyProvider>
-            <TenantSegmentProvider>
-            <CurrencyProvider>
-            <EntityProvider>
-            <ScenarioProvider>
-            <ToastProvider>
-              <CommandMenuProvider>
-                <CommandPalette />
-                {children}
-              </CommandMenuProvider>
-            </ToastProvider>
-            </ScenarioProvider>
-            </EntityProvider>
-            </CurrencyProvider>
-            </TenantSegmentProvider>
-            </CompanyProvider>
-          </TenantProvider>
-        </I18nProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
   );
 }

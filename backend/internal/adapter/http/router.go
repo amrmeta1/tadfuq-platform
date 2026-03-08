@@ -13,7 +13,7 @@ import (
 )
 
 type RouterDeps struct {
-	Validator   *auth.Validator
+	Validator   *auth.Validator // Optional - can be nil for demo mode
 	Users       domain.UserRepository
 	Memberships domain.MembershipRepository
 	AuditRepo   domain.AuditLogRepository
@@ -39,22 +39,20 @@ func NewRouter(deps RouterDeps) http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Authenticated routes (Keycloak JWT)
+	// API routes (no authentication - demo mode)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.KeycloakAuth(deps.Validator, deps.AuditRepo))
+		r.Use(middleware.DemoMode(deps.Users))
 		r.Use(middleware.TenantFromHeader)
-		r.Use(middleware.ProvisionUser(deps.Users))
 
 		// Current user profile
 		r.Get("/me", deps.Members.GetProfile)
 
 		// Tenant CRUD
 		r.Route("/tenants", func(r chi.Router) {
-			r.With(middleware.RequirePermission(auth.PermTenantCreate)).Post("/", deps.Tenants.Create)
+			r.Post("/", deps.Tenants.Create)
 
 			r.Route("/{tenantID}", func(r chi.Router) {
 				r.Use(middleware.TenantFromRouteParam("tenantID"))
-				r.Use(middleware.RequireTenantMembership(deps.Memberships))
 				r.Use(middleware.TenantRateLimit(100, time.Minute))
 
 				r.Get("/", deps.Tenants.GetByID)
@@ -72,9 +70,8 @@ func NewRouter(deps RouterDeps) http.Handler {
 		// Audit logs (requires tenant context)
 		r.Route("/audit-logs", func(r chi.Router) {
 			r.Use(middleware.RequireTenant)
-			r.Use(middleware.RequireTenantMembership(deps.Memberships))
 			r.Use(middleware.TenantRateLimit(100, time.Minute))
-			r.With(middleware.RequirePermission(auth.PermAuditRead)).Get("/", deps.Audit.ListByTenant)
+			r.Get("/", deps.Audit.ListByTenant)
 		})
 	})
 

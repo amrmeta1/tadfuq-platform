@@ -7,8 +7,6 @@ import { FinancialAnalysisSection } from "@/components/marketing/financial-analy
 import { HeroSection } from "@/components/marketing/hero-section";
 import { ConnectSection } from "@/components/marketing/connect-section";
 
-// Disable static generation
-export const dynamic = 'force-dynamic';
 import { IntegrationsSection } from "@/components/marketing/integrations-section";
 import Link from "next/link";
 import { ArrowRight, Zap, Shield, TrendingUp, DollarSign } from "lucide-react";
@@ -90,10 +88,10 @@ export default function HomePage() {
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"
           >
             {[
-              { icon: Zap, title: "AI Forecasting", desc: "Predict cash flow with 95% accuracy", color: "neon" },
-              { icon: Shield, title: "Fraud Detection", desc: "Real-time alerts", color: "blue-500" },
-              { icon: TrendingUp, title: "Smart Analytics", desc: "Actionable insights", color: "purple-500" },
-              { icon: DollarSign, title: "Auto Collections", desc: "Automated tracking", color: "amber-500" }
+              { icon: Zap, title: "AI Forecasting", desc: "Predict cash flow with 95% accuracy", bgClass: "bg-neon/10", textClass: "text-neon" },
+              { icon: Shield, title: "Fraud Detection", desc: "Real-time alerts", bgClass: "bg-blue-500/10", textClass: "text-blue-500" },
+              { icon: TrendingUp, title: "Smart Analytics", desc: "Actionable insights", bgClass: "bg-purple-500/10", textClass: "text-purple-500" },
+              { icon: DollarSign, title: "Auto Collections", desc: "Automated tracking", bgClass: "bg-amber-500/10", textClass: "text-amber-500" }
             ].map((feature, i) => {
               const Icon = feature.icon;
               return (
@@ -107,8 +105,8 @@ export default function HomePage() {
                   transition={{ duration: 0.3 }}
                   className="text-center cursor-pointer"
                 >
-                  <div className={`inline-flex items-center justify-center w-16 h-16 bg-${feature.color}/10 rounded-2xl mb-4`}>
-                    <Icon className={`w-8 h-8 text-${feature.color}`} />
+                  <div className={`inline-flex items-center justify-center w-16 h-16 ${feature.bgClass} rounded-2xl mb-4`}>
+                    <Icon className={`w-8 h-8 ${feature.textClass}`} />
                   </div>
                   <h3 className="text-xl font-bold text-zinc-900 mb-2">{feature.title}</h3>
                   <p className="text-zinc-600">{feature.desc}</p>

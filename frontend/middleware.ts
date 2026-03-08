@@ -12,11 +12,6 @@ const BASE_HOST = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "TadFuq.ai";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Redirect root to /home
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL('/home', request.url));
-  }
-
   // Skip middleware for static files and API routes
   if (
     pathname.startsWith("/_next") ||

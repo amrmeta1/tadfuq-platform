@@ -107,9 +107,9 @@ export class ApiClientError extends Error {
 }
 
 export const tenantApi = new ApiClient(
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080"
+  process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : "")
 );
 
 export const ingestionApi = new ApiClient(
-  process.env.NEXT_PUBLIC_INGESTION_API_BASE_URL || "http://localhost:8081"
+  process.env.NEXT_PUBLIC_INGESTION_API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : "")
 );

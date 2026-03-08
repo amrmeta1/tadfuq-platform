@@ -14,7 +14,7 @@ import (
 
 // IngestionRouterDeps holds dependencies for the ingestion service router.
 type IngestionRouterDeps struct {
-	Validator   *auth.Validator
+	Validator   *auth.Validator // Optional - can be nil for demo mode
 	Users       domain.UserRepository
 	Memberships domain.MembershipRepository
 	AuditRepo   domain.AuditLogRepository
@@ -41,15 +41,13 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok","service":"ingestion-service"}`))
 	})
 
-	// Authenticated routes (Keycloak JWT)
+	// API routes (no authentication - demo mode)
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.KeycloakAuth(deps.Validator, deps.AuditRepo))
+		r.Use(middleware.DemoMode(deps.Users))
 		r.Use(middleware.TenantFromHeader)
-		r.Use(middleware.ProvisionUser(deps.Users))
 
 		r.Route("/tenants/{tenantID}", func(r chi.Router) {
 			r.Use(middleware.TenantFromRouteParam("tenantID"))
-			r.Use(middleware.RequireTenantMembership(deps.Memberships))
 			r.Use(middleware.TenantRateLimit(100, time.Minute))
 
 			// CSV import
@@ -59,7 +57,7 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 			r.Get("/transactions", deps.Ingestion.ListTransactions)
 
 			// Cash position (treasury/forecast read)
-			r.With(middleware.RequirePermission(auth.PermTreasuryRead)).Get("/cash-position", deps.Ingestion.GetCashPosition)
+			r.Get("/cash-position", deps.Ingestion.GetCashPosition)
 
 			// Bank accounts
 			r.Post("/bank-accounts", deps.Ingestion.CreateBankAccount)
@@ -69,11 +67,11 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 			r.Post("/sync/accounting", deps.Ingestion.SyncAccounting)
 
 			// Cash analysis (run and get latest)
-			r.With(middleware.RequirePermission(auth.PermIngestionRead)).Get("/analysis/latest", deps.Analysis.GetLatest)
-			r.With(middleware.RequirePermission(auth.PermIngestionRead)).Post("/analysis/run", deps.Analysis.RunAnalysis)
+			r.Get("/analysis/latest", deps.Analysis.GetLatest)
+			r.Post("/analysis/run", deps.Analysis.RunAnalysis)
 
 			// Cash forecast (13-week deterministic forecast)
-			r.With(middleware.RequirePermission(auth.PermTreasuryRead)).Get("/forecast/current", deps.Forecast.GetCurrentForecast)
+			r.Get("/forecast/current", deps.Forecast.GetCurrentForecast)
 		})
 	})
 

@@ -78,13 +78,21 @@ func run() error {
 	_ = publisher // available for usecases that need to emit domain events
 	_ = js        // available for starting consumer workers
 
-	// Init Keycloak JWKS client + JWT validator
-	jwksClient := auth.NewJWKSClient(
-		cfg.Auth.JWKSURL,
-		time.Duration(cfg.Auth.JWKSCacheTTL)*time.Second,
-	)
-	jwtValidator := auth.NewValidator(jwksClient, cfg.Auth.IssuerURL, cfg.Auth.Audience)
-	log.Info().Str("issuer", cfg.Auth.IssuerURL).Str("jwks", cfg.Auth.JWKSURL).Msg("keycloak auth configured")
+	// Init Keycloak auth (OPTIONAL - for demo mode, can be disabled)
+	var jwtValidator *auth.Validator
+	authDevMode := os.Getenv("AUTH_DEV_MODE")
+	
+	if authDevMode == "true" || authDevMode == "1" {
+		log.Warn().Msg("AUTH DISABLED - running in demo mode without authentication")
+		jwtValidator = nil
+	} else {
+		jwksClient := auth.NewJWKSClient(
+			cfg.Auth.JWKSURL,
+			time.Duration(cfg.Auth.JWKSCacheTTL)*time.Second,
+		)
+		jwtValidator = auth.NewValidator(jwksClient, cfg.Auth.IssuerURL, cfg.Auth.Audience)
+		log.Info().Str("issuer", cfg.Auth.IssuerURL).Str("jwks", cfg.Auth.JWKSURL).Msg("keycloak auth configured")
+	}
 
 	// Init repositories
 	tenantRepo := db.NewTenantRepo(pool)

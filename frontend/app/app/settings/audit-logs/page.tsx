@@ -151,6 +151,7 @@ export default function AuditLogsPage() {
 
   const handleExportCSV = () => {
     if (!filteredLogs.length) return;
+    if (typeof window === "undefined") return;
 
     const headers = ["Timestamp", "User", "Action", "Entity Type", "Entity ID", "IP Address"];
     
@@ -179,6 +180,7 @@ export default function AuditLogsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
