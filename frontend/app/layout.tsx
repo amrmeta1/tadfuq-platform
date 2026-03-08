@@ -10,9 +10,6 @@ export const metadata: Metadata = {
   description: "Agentic financial management for GCC SMEs",
 };
 
-// Allow static generation for better performance
-export const dynamic = 'auto';
-
 export default function RootLayout({
   children,
 }: {
