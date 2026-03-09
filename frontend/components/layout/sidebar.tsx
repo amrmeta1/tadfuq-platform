@@ -37,6 +37,7 @@ import {
   Layers,
   Brain,
   Monitor,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/lib/i18n/context";
@@ -82,6 +83,11 @@ const COMPLIANCE: NavItem[] = [
   { navKey: "budget", icon: Target, href: "/app/analytics/budget" },
   { navKey: "zakatVat", icon: Calendar, href: "/app/zakat-vat" },
   { navKey: "audit", icon: ShieldCheck, href: "/app/audit" },
+];
+
+const AI_ADVISOR: NavItem[] = [
+  { navKey: "agents", icon: Bot, href: "/app/ai-advisor" },
+  { navKey: "documents", icon: FileText, href: "/app/ai-advisor/documents" },
 ];
 
 const ENTERPRISE: NavItem[] = [
@@ -180,7 +186,7 @@ function NavSection({
   );
 }
 
-type SectionKey = "liquidity" | "operations" | "compliance" | "enterprise";
+type SectionKey = "liquidity" | "operations" | "compliance" | "ai" | "enterprise";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -191,6 +197,7 @@ export function Sidebar() {
     liquidity: true,
     operations: true,
     compliance: true,
+    ai: true,
     enterprise: true,
   });
 
@@ -263,6 +270,7 @@ export function Sidebar() {
         <NavSection title={t.nav.sectionLiquidity} items={LIQUIDITY_CORE} pathname={pathname} nav={t.nav} open={openSections.liquidity} onToggle={() => toggle("liquidity")} demoBasePath={demoBasePath} />
         <NavSection title={t.nav.sectionOperations} items={OPERATIONS} pathname={pathname} nav={t.nav} open={openSections.operations} onToggle={() => toggle("operations")} demoBasePath={demoBasePath} />
         <NavSection title={t.nav.sectionCompliance} items={COMPLIANCE} pathname={pathname} nav={t.nav} open={openSections.compliance} onToggle={() => toggle("compliance")} demoBasePath={demoBasePath} />
+        <NavSection title={t.nav.sectionAI} items={AI_ADVISOR} pathname={pathname} nav={t.nav} open={openSections.ai} onToggle={() => toggle("ai")} demoBasePath={demoBasePath} />
         <NavSection title={t.nav.sectionEnterprise} items={ENTERPRISE} pathname={pathname} nav={t.nav} open={openSections.enterprise} onToggle={() => toggle("enterprise")} demoBasePath={demoBasePath} />
       </nav>
     </aside>

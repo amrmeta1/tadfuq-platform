@@ -9,24 +9,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n/context";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getTenantId } from "@/lib/api/client";
 
 interface ChatResponse {
-  answer?: string;
-  response?: string;
+  answer: string;
+  citations?: Array<{
+    document_id: string;
+    chunk_id: string;
+    content?: string;
+  }>;
 }
 
 export function TreasuryChat() {
   const { locale, dir } = useI18n();
   const isAr = locale === "ar";
+  const tenantId = getTenantId();
   
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
+  const [citations, setCitations] = useState<Array<any>>([]);
   
   const answerRef = useRef<HTMLDivElement>(null);
 
   const chatMutation = useMutation<ChatResponse, Error, string>({
     mutationFn: async (question: string) => {
-      const response = await fetch('/api/v1/chat', {
+      const response = await fetch(`/api/v1/tenants/${tenantId}/rag/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question })
@@ -39,7 +46,8 @@ export function TreasuryChat() {
       return response.json();
     },
     onSuccess: (data) => {
-      setAnswer(data.answer || data.response || null);
+      setAnswer(data.answer || null);
+      setCitations(data.citations || []);
       // Auto-scroll to answer
       setTimeout(() => {
         answerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -93,8 +101,8 @@ export function TreasuryChat() {
           {chatMutation.isError && (
             <p className="text-sm text-rose-600">
               {isAr 
-                ? "حدث خطأ. حاول مرة أخرى."
-                : "An error occurred. Please try again."}
+                ? "مساعد الذكاء الاصطناعي غير متاح مؤقتاً."
+                : "AI assistant is temporarily unavailable."}
             </p>
           )}
         </div>
@@ -124,6 +132,20 @@ export function TreasuryChat() {
                 {answer}
               </p>
             </div>
+            {citations && citations.length > 0 && (
+              <div className="pt-2 space-y-1">
+                <p className="text-xs text-muted-foreground font-medium">
+                  {isAr ? "المصادر:" : "Sources:"}
+                </p>
+                <ul className="space-y-1">
+                  {citations.map((citation, idx) => (
+                    <li key={citation.chunk_id || idx} className="text-xs text-muted-foreground">
+                      • {isAr ? "مرجع وثيقة" : "Document reference"} {idx + 1}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

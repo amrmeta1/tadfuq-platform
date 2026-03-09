@@ -21,6 +21,8 @@ type IngestionRouterDeps struct {
 	Ingestion   *IngestionHandler
 	Analysis    *AnalysisHandler
 	Forecast    *ForecastHandler
+	CashStory   *CashStoryHandler
+	Decision    *DecisionHandler
 }
 
 // NewIngestionRouter builds the chi router for the ingestion service.
@@ -72,6 +74,12 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 
 			// Cash forecast (13-week deterministic forecast)
 			r.Get("/forecast/current", deps.Forecast.GetCurrentForecast)
+
+			// Cash story (AI-powered narrative)
+			r.Get("/cash-story", deps.CashStory.GetCashStory)
+
+			// AI recommended actions
+			r.Get("/ai/actions", deps.Decision.GetRecommendedActions)
 		})
 	})
 

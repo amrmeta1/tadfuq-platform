@@ -5,6 +5,9 @@ import { useI18n } from "@/lib/i18n/context";
 import { useToast } from "@/components/ui/toast";
 import { useScenario } from "@/contexts/ScenarioContext";
 import { AIDailyBrief } from "@/components/agent/AIDailyBrief";
+import { CashStoryPanel } from "@/components/agent/CashStoryPanel";
+import { AIInsightsPanel } from "@/components/agent/AIInsightsPanel";
+import { RecommendedActionsPanel } from "@/components/agent/RecommendedActionsPanel";
 import { ForecastSnapshot } from "@/components/agent/ForecastSnapshot";
 import { TreasuryChat } from "@/components/agent/TreasuryChat";
 import { ActiveCasesPanel } from "@/components/agent/ActiveCasesPanel";
@@ -13,6 +16,7 @@ import { SimulationModal } from "@/components/agent/SimulationModal";
 import { ScenarioBanner } from "@/components/agent/ScenarioBanner";
 import type { AgentCase } from "@/components/agent/ActiveCasesPanel";
 import type { Scenario } from "@/contexts/ScenarioContext";
+import type { TreasuryAction } from "@/lib/api/actions-api";
 import { getTenantId } from "@/lib/api/client";
 import { useActiveAlerts } from "@/lib/hooks/useActiveAlerts";
 import { useDailyBrief } from "@/lib/hooks/useDailyBrief";
@@ -75,6 +79,11 @@ export default function AIAdvisorPage() {
     setSimulationOpen(true);
   }, []);
 
+  const handleActionSimulate = useCallback((action: TreasuryAction) => {
+    // Open simulation modal - user will configure manually
+    setSimulationOpen(true);
+  }, []);
+
   return (
     <div dir={dir} className="min-h-full w-full" data-page-content>
       <div className="max-w-7xl w-full mx-auto px-6 py-8 flex flex-col gap-6">
@@ -89,6 +98,9 @@ export default function AIAdvisorPage() {
           onOpenCases={handleOpenCases}
           onOpenSimulation={handleSimulationOpen}
         />
+        <CashStoryPanel />
+        <AIInsightsPanel />
+        <RecommendedActionsPanel onSimulate={handleActionSimulate} />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ForecastSnapshot tenantId={tenantId} />
           <div ref={casesSectionRef}>

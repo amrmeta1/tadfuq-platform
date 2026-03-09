@@ -24,6 +24,7 @@ import (
 	"github.com/finch-co/cashflow/internal/ingestion"
 	"github.com/finch-co/cashflow/internal/observability"
 	"github.com/finch-co/cashflow/internal/usecase"
+        "github.com/finch-co/cashflow/internal/rag/adapter/llm"
 )
 
 func main() {
@@ -120,10 +121,24 @@ func run() error {
 	analysisUC := analysis.NewUseCase(analysisRepo)
 	forecastUC := usecase.NewForecastUseCase(bankTxnRepo, bankAccountRepo)
 
+	// Initialize Claude client for cash story
+	var claudeClient llm.LLMClient
+	claudeAPIKey := os.Getenv("ANTHROPIC_API_KEY")
+	if claudeAPIKey != "" {
+		claudeClient = llm.NewClaudeClient(claudeAPIKey)
+		log.Info().Msg("Claude client initialized for cash story")
+	} else {
+		log.Warn().Msg("ANTHROPIC_API_KEY not set, cash story will use fallback")
+	}
+
+	// Initialize Cash Story Use Case
+	cashStoryUC := usecase.NewCashStoryUseCase(bankTxnRepo, forecastUC, claudeClient)
+
 	// Init HTTP handlers
 	ingestionHandler := httpAdapter.NewIngestionHandler(ingestionUC, publisher)
 	analysisHandler := httpAdapter.NewAnalysisHandler(analysisUC, analysisRepo)
 	forecastHandler := httpAdapter.NewForecastHandler(forecastUC)
+	cashStoryHandler := httpAdapter.NewCashStoryHandler(cashStoryUC)
 
 	// Build router
 	router := httpAdapter.NewIngestionRouter(httpAdapter.IngestionRouterDeps{
@@ -134,6 +149,7 @@ func run() error {
 		Ingestion:   ingestionHandler,
 		Analysis:    analysisHandler,
 		Forecast:    forecastHandler,
+		CashStory:   cashStoryHandler,
 	})
 
 	// Start command consumer (background goroutine) - only if RabbitMQ is enabled
