@@ -9,18 +9,24 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/finch-co/cashflow/internal/agent/engine"
+	"github.com/finch-co/cashflow/internal/agent/handler"
+	"github.com/finch-co/cashflow/internal/agent/repository"
+	"github.com/finch-co/cashflow/internal/api"
+	"github.com/finch-co/cashflow/internal/api/handlers"
+	"github.com/finch-co/cashflow/internal/auth"
+	"github.com/finch-co/cashflow/internal/config"
+	"github.com/finch-co/cashflow/internal/db"
+	"github.com/finch-co/cashflow/internal/db/repositories"
+	"github.com/finch-co/cashflow/internal/enterprise"
+	"github.com/finch-co/cashflow/internal/events"
+	"github.com/finch-co/cashflow/internal/liquidity"
+	"github.com/finch-co/cashflow/internal/observability"
+	"github.com/finch-co/cashflow/internal/operations"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-
-	"github.com/finch-co/cashflow/internal/adapter/db"
-	httpAdapter "github.com/finch-co/cashflow/internal/adapter/http"
-	"github.com/finch-co/cashflow/internal/auth"
-	"github.com/finch-co/cashflow/internal/config"
-	"github.com/finch-co/cashflow/internal/events"
-	"github.com/finch-co/cashflow/internal/observability"
-	"github.com/finch-co/cashflow/internal/usecase"
 )
 
 func main() {
@@ -81,7 +87,7 @@ func run() error {
 	// Init Keycloak auth (OPTIONAL - for demo mode, can be disabled)
 	var jwtValidator *auth.Validator
 	authDevMode := os.Getenv("AUTH_DEV_MODE")
-	
+
 	if authDevMode == "true" || authDevMode == "1" {
 		log.Warn().Msg("AUTH DISABLED - running in demo mode without authentication")
 		jwtValidator = nil
@@ -95,29 +101,76 @@ func run() error {
 	}
 
 	// Init repositories
-	tenantRepo := db.NewTenantRepo(pool)
-	userRepo := db.NewUserRepo(pool)
-	membershipRepo := db.NewMembershipRepo(pool)
-	auditRepo := db.NewAuditLogRepo(pool)
+	tenantRepo := repositories.NewTenantRepo(pool)
+	userRepo := repositories.NewUserRepo(pool)
+	membershipRepo := repositories.NewMembershipRepo(pool)
+	auditRepo := repositories.NewAuditLogRepo(pool)
+	bankTxnRepo := repositories.NewBankTransactionRepo(pool)
 
 	// Init use cases
-	tenantUC := usecase.NewTenantUseCase(tenantRepo, membershipRepo, auditRepo)
-	memberUC := usecase.NewMemberUseCase(userRepo, membershipRepo, auditRepo)
+	tenantUC := enterprise.NewTenantUseCase(tenantRepo, membershipRepo, auditRepo)
+	memberUC := enterprise.NewMemberUseCase(userRepo, membershipRepo, auditRepo)
 
 	// Init HTTP handlers
-	tenantHandler := httpAdapter.NewTenantHandler(tenantUC)
-	memberHandler := httpAdapter.NewMemberHandler(memberUC)
-	auditHandler := httpAdapter.NewAuditHandler(auditRepo)
+	tenantHandler := handlers.NewTenantHandler(tenantUC)
+	memberHandler := handlers.NewMemberHandler(memberUC)
+	auditHandler := handlers.NewAuditHandler(auditRepo)
+	// AI Advisor handlers - create with minimal dependencies
+	analysisHandler := handlers.NewAnalysisHandler(bankTxnRepo)
+
+	// RAG handlers - proxy to RAG service
+	ragServiceURL := os.Getenv("RAG_SERVICE_URL")
+	var ragProxy *handlers.RAGProxyHandler
+
+	if ragServiceURL != "" {
+		ragProxy = handlers.NewRAGProxyHandler(ragServiceURL)
+		fmt.Printf("✓ RAG handlers enabled (proxy to %s)\n", ragServiceURL)
+	} else {
+		fmt.Println("⚠ RAG handlers disabled (RAG_SERVICE_URL not set)")
+	}
+
+	// Operations handler for cash position
+	// Initialize with minimal dependencies - will need bank account repo
+	bankAccountRepo := repositories.NewBankAccountRepo(pool)
+	ingestionUC := operations.NewUseCase(bankAccountRepo, nil, bankTxnRepo, nil, nil, nil)
+	ingestionHandler := operations.NewIngestionHandler(ingestionUC)
+
+	// Signal Engine (AI Agent Phase A)
+	signalRepo := repository.NewSignalRepository(pool)
+	forecastUC := liquidity.NewForecastUseCase(bankTxnRepo, bankAccountRepo)
+	signalEngine := engine.NewSignalEngine(bankTxnRepo, signalRepo, forecastUC)
+	signalHandler := handler.NewSignalHandler(signalEngine)
+	fmt.Println("✓ Signal Engine initialized (Phase A - deterministic)")
+
+	// Liquidity Module (Forecast, Cash Story, Decisions)
+	forecastHandler := liquidity.NewForecastHandler(forecastUC)
+
+	// Note: CashStory and DecisionEngine require LLM client which may not be available
+	// For now, we'll create a composite handler with forecast only
+	// Cash story and decisions will return empty/mock data until LLM is configured
+	var liquidityHandler *liquidity.CompositeHandler
+
+	// Try to initialize with minimal dependencies
+	cashStoryUC := liquidity.NewCashStoryUseCase(bankTxnRepo, forecastUC, nil) // nil LLM client
+	decisionEngine := liquidity.NewDecisionEngine(forecastUC, bankTxnRepo)
+	liquidityHandler = liquidity.NewCompositeHandler(forecastHandler, cashStoryUC, decisionEngine)
+	fmt.Println("✓ Liquidity module initialized (forecast, cash-story, decisions)")
 
 	// Build router
-	router := httpAdapter.NewRouter(httpAdapter.RouterDeps{
-		Validator:   jwtValidator,
-		Users:       userRepo,
-		Memberships: membershipRepo,
-		AuditRepo:   auditRepo,
-		Tenants:     tenantHandler,
-		Members:     memberHandler,
-		Audit:       auditHandler,
+	router := api.NewRouter(api.RouterDeps{
+		Validator:    jwtValidator,
+		Users:        userRepo,
+		Memberships:  membershipRepo,
+		AuditRepo:    auditRepo,
+		Tenants:      tenantHandler,
+		Members:      memberHandler,
+		Audit:        auditHandler,
+		Documents:    ragProxy,
+		Analysis:     analysisHandler,
+		RagQuery:     ragProxy,
+		CashPosition: ingestionHandler,
+		Signals:      signalHandler,
+		Liquidity:    liquidityHandler,
 	})
 
 	// Start HTTP server
