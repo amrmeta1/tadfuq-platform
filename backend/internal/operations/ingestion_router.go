@@ -1,4 +1,4 @@
-package http
+package operations
 
 import (
 	"net/http"
@@ -8,24 +8,24 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 
 	"github.com/finch-co/cashflow/internal/auth"
-	"github.com/finch-co/cashflow/internal/domain"
 	"github.com/finch-co/cashflow/internal/middleware"
+	"github.com/finch-co/cashflow/internal/models"
 )
 
-// IngestionRouterDeps holds dependencies for the ingestion service router.
+// IngestionRouterDeps holds dependencies for the operations service router.
 type IngestionRouterDeps struct {
 	Validator   *auth.Validator // Optional - can be nil for demo mode
-	Users       domain.UserRepository
-	Memberships domain.MembershipRepository
-	AuditRepo   domain.AuditLogRepository
+	Users       models.UserRepository
+	Memberships models.MembershipRepository
+	AuditRepo   models.AuditLogRepository
 	Ingestion   *IngestionHandler
-	Analysis    *AnalysisHandler
-	Forecast    *ForecastHandler
-	CashStory   *CashStoryHandler
-	Decision    *DecisionHandler
+	Analysis    interface{}
+	Forecast    interface{}
+	CashStory   interface{}
+	Decision    interface{}
 }
 
-// NewIngestionRouter builds the chi router for the ingestion service.
+// NewIngestionRouter builds the chi router for the operations service.
 func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 	r := chi.NewRouter()
 
@@ -34,13 +34,13 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 	r.Use(chimw.RealIP)
 	r.Use(middleware.RequestLogging)
 	r.Use(chimw.Recoverer)
-	r.Use(corsMiddleware)
+	// CORS middleware handled by central router
 
 	// Health check (unauthenticated)
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"status":"ok","service":"ingestion-service"}`))
+		_, _ = w.Write([]byte(`{"status":"ok","service":"operations-service"}`))
 	})
 
 	// API routes (no authentication - demo mode)
@@ -68,18 +68,6 @@ func NewIngestionRouter(deps IngestionRouterDeps) http.Handler {
 			r.Post("/sync/bank", deps.Ingestion.SyncBank)
 			r.Post("/sync/accounting", deps.Ingestion.SyncAccounting)
 
-			// Cash analysis (run and get latest)
-			r.Get("/analysis/latest", deps.Analysis.GetLatest)
-			r.Post("/analysis/run", deps.Analysis.RunAnalysis)
-
-			// Cash forecast (13-week deterministic forecast)
-			r.Get("/forecast/current", deps.Forecast.GetCurrentForecast)
-
-			// Cash story (AI-powered narrative)
-			r.Get("/cash-story", deps.CashStory.GetCashStory)
-
-			// AI recommended actions
-			r.Get("/ai/actions", deps.Decision.GetRecommendedActions)
 		})
 	})
 

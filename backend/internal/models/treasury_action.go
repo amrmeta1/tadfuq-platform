@@ -1,4 +1,4 @@
-package domain
+package models
 
 // TreasuryAction represents a recommended financial action for the tenant
 type TreasuryAction struct {
@@ -13,12 +13,12 @@ type TreasuryAction struct {
 
 // Action type constants
 const (
-	ActionDelayVendorPayments    = "delay_vendor_payments"
-	ActionAccelerateReceivables  = "accelerate_receivables"
-	ActionMoveLiquidity          = "move_liquidity"
-	ActionReduceMarketingSpend   = "reduce_marketing_spend"
-	ActionDelayHiring            = "delay_hiring"
-	ActionCutDiscretionarySpend  = "cut_discretionary_spend"
+	ActionDelayVendorPayments   = "delay_vendor_payments"
+	ActionAccelerateReceivables = "accelerate_receivables"
+	ActionMoveLiquidity         = "move_liquidity"
+	ActionReduceMarketingSpend  = "reduce_marketing_spend"
+	ActionDelayHiring           = "delay_hiring"
+	ActionCutDiscretionarySpend = "cut_discretionary_spend"
 )
 
 // Category constants

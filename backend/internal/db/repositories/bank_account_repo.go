@@ -1,13 +1,13 @@
-package db
+package repositories
 
 import (
+"encoding/json"
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type BankAccountRepo struct {
@@ -18,13 +18,13 @@ func NewBankAccountRepo(pool *pgxpool.Pool) *BankAccountRepo {
 	return &BankAccountRepo{pool: pool}
 }
 
-func (r *BankAccountRepo) Create(ctx context.Context, tenantID uuid.UUID, input domain.CreateBankAccountInput) (*domain.BankAccount, error) {
-	var ba domain.BankAccount
+func (r *BankAccountRepo) Create(ctx context.Context, tenantID uuid.UUID, input models.CreateBankAccountInput) (*models.BankAccount, error) {
+	var ba models.BankAccount
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO bank_accounts (tenant_id, provider, external_id, currency, nickname, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, tenant_id, provider, external_id, currency, nickname, status, metadata, created_at, updated_at`,
-		tenantID, input.Provider, input.ExternalID, input.Currency, input.Nickname, mapToJSON(input.Metadata),
+		tenantID, input.Provider, input.ExternalID, input.Currency, input.Nickname, func() []byte { b, _ := json.Marshal(input.Metadata); return b }(),
 	).Scan(
 		&ba.ID, &ba.TenantID, &ba.Provider, &ba.ExternalID,
 		&ba.Currency, &ba.Nickname, &ba.Status, &ba.Metadata,
@@ -36,8 +36,8 @@ func (r *BankAccountRepo) Create(ctx context.Context, tenantID uuid.UUID, input 
 	return &ba, nil
 }
 
-func (r *BankAccountRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*domain.BankAccount, error) {
-	var ba domain.BankAccount
+func (r *BankAccountRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (*models.BankAccount, error) {
+	var ba models.BankAccount
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, tenant_id, provider, external_id, currency, nickname, status, metadata, created_at, updated_at
 		FROM bank_accounts
@@ -54,7 +54,7 @@ func (r *BankAccountRepo) GetByID(ctx context.Context, tenantID, id uuid.UUID) (
 	return &ba, nil
 }
 
-func (r *BankAccountRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]domain.BankAccount, int, error) {
+func (r *BankAccountRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.BankAccount, int, error) {
 	var total int
 	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM bank_accounts WHERE tenant_id = $1`, tenantID).Scan(&total)
 	if err != nil {
@@ -74,9 +74,9 @@ func (r *BankAccountRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, 
 	}
 	defer rows.Close()
 
-	var accounts []domain.BankAccount
+	var accounts []models.BankAccount
 	for rows.Next() {
-		var ba domain.BankAccount
+		var ba models.BankAccount
 		if err := rows.Scan(
 			&ba.ID, &ba.TenantID, &ba.Provider, &ba.ExternalID,
 			&ba.Currency, &ba.Nickname, &ba.Status, &ba.Metadata,

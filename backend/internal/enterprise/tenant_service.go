@@ -1,25 +1,25 @@
-package usecase
+package enterprise
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 
 	"github.com/finch-co/cashflow/internal/auth"
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type TenantUseCase struct {
-	tenants     domain.TenantRepository
-	memberships domain.MembershipRepository
-	audit       domain.AuditLogRepository
+	tenants     models.TenantRepository
+	memberships models.MembershipRepository
+	audit       models.AuditLogRepository
 }
 
 func NewTenantUseCase(
-	tenants domain.TenantRepository,
-	memberships domain.MembershipRepository,
-	audit domain.AuditLogRepository,
+	tenants models.TenantRepository,
+	memberships models.MembershipRepository,
+	audit models.AuditLogRepository,
 ) *TenantUseCase {
 	return &TenantUseCase{
 		tenants:     tenants,
@@ -29,14 +29,14 @@ func NewTenantUseCase(
 }
 
 // Create creates a new tenant and adds the calling user as tenant_admin.
-func (uc *TenantUseCase) Create(ctx context.Context, input domain.CreateTenantInput) (*domain.Tenant, error) {
+func (uc *TenantUseCase) Create(ctx context.Context, input models.CreateTenantInput) (*models.Tenant, error) {
 	// RBAC: enforce at usecase level
 	if !uc.hasPermission(ctx, auth.PermTenantCreate) {
-		return nil, domain.ErrForbidden
+		return nil, models.ErrForbidden
 	}
 
 	if input.Name == "" || input.Slug == "" {
-		return nil, fmt.Errorf("%w: name and slug are required", domain.ErrValidation)
+		return nil, fmt.Errorf("%w: name and slug are required", models.ErrValidation)
 	}
 
 	tenant, err := uc.tenants.Create(ctx, input)
@@ -45,19 +45,19 @@ func (uc *TenantUseCase) Create(ctx context.Context, input domain.CreateTenantIn
 	}
 
 	// Auto-add the creator as tenant_admin
-	userID, _ := domain.UserIDFromContext(ctx)
+	userID, _ := models.UserIDFromContext(ctx)
 	if userID != uuid.Nil {
-		_, _ = uc.memberships.Create(ctx, tenant.ID, domain.CreateMembershipInput{
+		_, _ = uc.memberships.Create(ctx, tenant.ID, models.CreateMembershipInput{
 			UserID: userID,
 			Role:   "tenant_admin",
 		})
 	}
 
-	sub, _ := domain.UserSubFromContext(ctx)
-	_ = uc.audit.Create(ctx, domain.CreateAuditLogInput{
+	sub, _ := models.UserSubFromContext(ctx)
+	_ = uc.audit.Create(ctx, models.CreateAuditLogInput{
 		TenantID:   &tenant.ID,
 		ActorSub:   sub,
-		Action:     domain.AuditTenantCreated,
+		Action:     models.AuditTenantCreated,
 		EntityType: "tenant",
 		EntityID:   tenant.ID.String(),
 	})
@@ -65,16 +65,16 @@ func (uc *TenantUseCase) Create(ctx context.Context, input domain.CreateTenantIn
 	return tenant, nil
 }
 
-func (uc *TenantUseCase) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
+func (uc *TenantUseCase) GetByID(ctx context.Context, id uuid.UUID) (*models.Tenant, error) {
 	if !uc.hasPermission(ctx, auth.PermTenantRead) {
-		return nil, domain.ErrForbidden
+		return nil, models.ErrForbidden
 	}
 	return uc.tenants.GetByID(ctx, id)
 }
 
-func (uc *TenantUseCase) List(ctx context.Context, limit, offset int) ([]domain.Tenant, int, error) {
+func (uc *TenantUseCase) List(ctx context.Context, limit, offset int) ([]models.Tenant, int, error) {
 	if !uc.hasPermission(ctx, auth.PermTenantRead) {
-		return nil, 0, domain.ErrForbidden
+		return nil, 0, models.ErrForbidden
 	}
 	if limit <= 0 {
 		limit = 20
@@ -85,9 +85,9 @@ func (uc *TenantUseCase) List(ctx context.Context, limit, offset int) ([]domain.
 	return uc.tenants.List(ctx, limit, offset)
 }
 
-func (uc *TenantUseCase) Update(ctx context.Context, id uuid.UUID, input domain.UpdateTenantInput) (*domain.Tenant, error) {
+func (uc *TenantUseCase) Update(ctx context.Context, id uuid.UUID, input models.UpdateTenantInput) (*models.Tenant, error) {
 	if !uc.hasPermission(ctx, auth.PermTenantUpdate) {
-		return nil, domain.ErrForbidden
+		return nil, models.ErrForbidden
 	}
 
 	tenant, err := uc.tenants.Update(ctx, id, input)
@@ -95,11 +95,11 @@ func (uc *TenantUseCase) Update(ctx context.Context, id uuid.UUID, input domain.
 		return nil, err
 	}
 
-	sub, _ := domain.UserSubFromContext(ctx)
-	_ = uc.audit.Create(ctx, domain.CreateAuditLogInput{
+	sub, _ := models.UserSubFromContext(ctx)
+	_ = uc.audit.Create(ctx, models.CreateAuditLogInput{
 		TenantID:   &id,
 		ActorSub:   sub,
-		Action:     domain.AuditTenantUpdated,
+		Action:     models.AuditTenantUpdated,
 		EntityType: "tenant",
 		EntityID:   id.String(),
 	})
@@ -109,18 +109,18 @@ func (uc *TenantUseCase) Update(ctx context.Context, id uuid.UUID, input domain.
 
 func (uc *TenantUseCase) Delete(ctx context.Context, id uuid.UUID) error {
 	if !uc.hasPermission(ctx, auth.PermTenantDelete) {
-		return domain.ErrForbidden
+		return models.ErrForbidden
 	}
 
 	if err := uc.tenants.Delete(ctx, id); err != nil {
 		return err
 	}
 
-	sub, _ := domain.UserSubFromContext(ctx)
-	_ = uc.audit.Create(ctx, domain.CreateAuditLogInput{
+	sub, _ := models.UserSubFromContext(ctx)
+	_ = uc.audit.Create(ctx, models.CreateAuditLogInput{
 		TenantID:   &id,
 		ActorSub:   sub,
-		Action:     domain.AuditTenantDeleted,
+		Action:     models.AuditTenantDeleted,
 		EntityType: "tenant",
 		EntityID:   id.String(),
 	})
@@ -130,7 +130,7 @@ func (uc *TenantUseCase) Delete(ctx context.Context, id uuid.UUID) error {
 
 // hasPermission resolves permissions from Keycloak client roles in context.
 func (uc *TenantUseCase) hasPermission(ctx context.Context, perm auth.Permission) bool {
-	roles := domain.ClientRolesFromContext(ctx)
+	roles := models.ClientRolesFromContext(ctx)
 	perms := auth.ResolvePermissions(roles)
 	return auth.HasPermission(perms, perm)
 }

@@ -1,4 +1,4 @@
-package domain
+package models
 
 import (
 	"time"
@@ -8,15 +8,15 @@ import (
 
 // Audit event action constants
 const (
-	AuditTenantCreated  = "tenant_created"
-	AuditMemberAdded    = "member_added"
-	AuditMemberRemoved  = "member_removed"
-	AuditRoleChanged    = "role_changed"
-	AuditAuthFailed     = "auth_failed"
-	AuditTokenInvalid   = "token_invalid"
-	AuditAccessDenied   = "access_denied"
-	AuditTenantUpdated  = "tenant_updated"
-	AuditTenantDeleted  = "tenant_deleted"
+	AuditTenantCreated = "tenant_created"
+	AuditMemberAdded   = "member_added"
+	AuditMemberRemoved = "member_removed"
+	AuditRoleChanged   = "role_changed"
+	AuditAuthFailed    = "auth_failed"
+	AuditTokenInvalid  = "token_invalid"
+	AuditAccessDenied  = "access_denied"
+	AuditTenantUpdated = "tenant_updated"
+	AuditTenantDeleted = "tenant_deleted"
 )
 
 type AuditLog struct {

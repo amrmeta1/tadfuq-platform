@@ -1,6 +1,7 @@
-package usecase
+package liquidity
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"fmt"
 	"math"
@@ -10,8 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/finch-co/cashflow/internal/domain"
-	"github.com/finch-co/cashflow/internal/rag/adapter/llm"
+	llm "github.com/finch-co/cashflow/internal/ai/claude"
 )
 
 const cashStoryPrompt = `You are a treasury analyst for a GCC-based company.
@@ -38,14 +38,14 @@ Keep it concise and actionable. Use SAR currency.`
 
 // CashStoryUseCase handles cash story generation logic
 type CashStoryUseCase struct {
-	txnRepo    domain.BankTransactionRepository
+	txnRepo    models.BankTransactionRepository
 	forecastUC *ForecastUseCase
 	llmClient  llm.LLMClient
 }
 
 // NewCashStoryUseCase creates a new cash story use case
 func NewCashStoryUseCase(
-	txnRepo domain.BankTransactionRepository,
+	txnRepo models.BankTransactionRepository,
 	forecastUC *ForecastUseCase,
 	llmClient llm.LLMClient,
 ) *CashStoryUseCase {
@@ -57,12 +57,12 @@ func NewCashStoryUseCase(
 }
 
 // GenerateCashStory generates an AI-powered cash story for the given tenant
-func (uc *CashStoryUseCase) GenerateCashStory(ctx context.Context, tenantID uuid.UUID) (*domain.CashStoryResult, error) {
+func (uc *CashStoryUseCase) GenerateCashStory(ctx context.Context, tenantID uuid.UUID) (*models.CashStoryResult, error) {
 	now := time.Now().UTC()
 	from := now.AddDate(0, 0, -7) // Last 7 days
 
 	// Fetch transactions for the last 7 days
-	filter := domain.TransactionFilter{
+	filter := models.TransactionFilter{
 		TenantID: tenantID,
 		From:     &from,
 		To:       &now,
@@ -100,7 +100,7 @@ func (uc *CashStoryUseCase) GenerateCashStory(ctx context.Context, tenantID uuid
 	// Generate narrative using Claude
 	summary, confidence := uc.generateNarrative(ctx, cashDelta, drivers, riskLevel, forecastConfidence)
 
-	return &domain.CashStoryResult{
+	return &models.CashStoryResult{
 		Summary:     summary,
 		Drivers:     drivers,
 		RiskLevel:   riskLevel,
@@ -110,7 +110,7 @@ func (uc *CashStoryUseCase) GenerateCashStory(ctx context.Context, tenantID uuid
 }
 
 // calculateCashDelta calculates the net cash change from transactions
-func (uc *CashStoryUseCase) calculateCashDelta(txns []domain.BankTransaction) float64 {
+func (uc *CashStoryUseCase) calculateCashDelta(txns []models.BankTransaction) float64 {
 	var delta float64
 	for _, txn := range txns {
 		delta += txn.Amount
@@ -119,7 +119,7 @@ func (uc *CashStoryUseCase) calculateCashDelta(txns []domain.BankTransaction) fl
 }
 
 // identifyTopDrivers identifies the top cash drivers (inflows and outflows)
-func (uc *CashStoryUseCase) identifyTopDrivers(txns []domain.BankTransaction) []domain.CashDriver {
+func (uc *CashStoryUseCase) identifyTopDrivers(txns []models.BankTransaction) []models.CashDriver {
 	// Group transactions by description/category
 	driverMap := make(map[string]float64)
 	for _, txn := range txns {
@@ -143,20 +143,20 @@ func (uc *CashStoryUseCase) identifyTopDrivers(txns []domain.BankTransaction) []
 	})
 
 	// Take top 3 inflows and top 3 outflows
-	var drivers []domain.CashDriver
+	var drivers []models.CashDriver
 	inflowCount := 0
 	outflowCount := 0
 
 	for _, entry := range entries {
 		if entry.impact > 0 && inflowCount < 3 {
-			drivers = append(drivers, domain.CashDriver{
+			drivers = append(drivers, models.CashDriver{
 				Name:   entry.name,
 				Impact: entry.impact,
 				Type:   "inflow",
 			})
 			inflowCount++
 		} else if entry.impact < 0 && outflowCount < 3 {
-			drivers = append(drivers, domain.CashDriver{
+			drivers = append(drivers, models.CashDriver{
 				Name:   entry.name,
 				Impact: math.Abs(entry.impact),
 				Type:   "outflow",
@@ -210,7 +210,7 @@ func (uc *CashStoryUseCase) normalizeDescription(desc string) string {
 }
 
 // determineRiskLevel determines risk level based on cash delta and forecast
-func (uc *CashStoryUseCase) determineRiskLevel(cashDelta float64, forecast *domain.ForecastResult) string {
+func (uc *CashStoryUseCase) determineRiskLevel(cashDelta float64, forecast *models.ForecastResult) string {
 	// Check forecast confidence
 	if forecast.Confidence < 0.5 {
 		return "high"
@@ -246,7 +246,7 @@ func (uc *CashStoryUseCase) determineRiskLevelFromDelta(cashDelta float64) strin
 func (uc *CashStoryUseCase) generateNarrative(
 	ctx context.Context,
 	cashDelta float64,
-	drivers []domain.CashDriver,
+	drivers []models.CashDriver,
 	riskLevel string,
 	forecastConfidence float64,
 ) (string, float64) {
@@ -281,7 +281,7 @@ func (uc *CashStoryUseCase) generateNarrative(
 }
 
 // buildPrompt builds the Claude prompt
-func (uc *CashStoryUseCase) buildPrompt(cashDelta float64, drivers []domain.CashDriver, riskLevel string) string {
+func (uc *CashStoryUseCase) buildPrompt(cashDelta float64, drivers []models.CashDriver, riskLevel string) string {
 	// Format cash delta
 	deltaStr := fmt.Sprintf("SAR %.2f", cashDelta)
 	if cashDelta >= 0 {

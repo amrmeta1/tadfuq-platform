@@ -1,4 +1,4 @@
-package domain
+package models
 
 import (
 	"time"
@@ -28,9 +28,9 @@ type ForecastMetrics struct {
 
 // ForecastResult is the complete forecast response for a tenant.
 type ForecastResult struct {
-	TenantID    uuid.UUID        `json:"tenant_id"`
-	GeneratedAt time.Time        `json:"generated_at"`
-	Metrics     ForecastMetrics  `json:"metrics"`
-	Forecast    []ForecastPoint  `json:"forecast"`   // 13 weeks
-	Confidence  float64          `json:"confidence"` // 0.68 (±1 std dev coverage)
+	TenantID    uuid.UUID       `json:"tenant_id"`
+	GeneratedAt time.Time       `json:"generated_at"`
+	Metrics     ForecastMetrics `json:"metrics"`
+	Forecast    []ForecastPoint `json:"forecast"`   // 13 weeks
+	Confidence  float64         `json:"confidence"` // 0.68 (±1 std dev coverage)
 }

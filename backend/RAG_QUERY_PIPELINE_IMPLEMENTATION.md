@@ -178,7 +178,7 @@ if searchUseCase != nil && llmClient != nil {
 
 ### Environment Variables
 ```bash
-export VOYAGE_API_KEY="pa-xxxxxxxxxxxxx"      # For embeddings
+export VOYAGE_API_KEY="pa-xxxxxxxxxxxx"      # For embeddings
 export ANTHROPIC_API_KEY="sk-ant-xxxxx"       # For Claude
 ```
 

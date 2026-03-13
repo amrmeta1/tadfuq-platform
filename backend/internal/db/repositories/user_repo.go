@@ -1,6 +1,7 @@
-package db
+package repositories
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"errors"
 	"fmt"
@@ -8,8 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type UserRepo struct {
@@ -22,8 +21,8 @@ func NewUserRepo(pool *pgxpool.Pool) *UserRepo {
 
 const userCols = `id, sub, email, full_name, avatar_url, status, last_login_at, created_at, updated_at`
 
-func scanUser(row pgx.Row) (*domain.User, error) {
-	var u domain.User
+func scanUser(row pgx.Row) (*models.User, error) {
+	var u models.User
 	err := row.Scan(&u.ID, &u.Sub, &u.Email, &u.FullName, &u.AvatarURL,
 		&u.Status, &u.LastLoginAt, &u.CreatedAt, &u.UpdatedAt)
 	return &u, err
@@ -31,7 +30,7 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 
 // Upsert creates or updates a user record from Keycloak JWT claims.
 // On conflict (same sub), it updates email and full_name.
-func (r *UserRepo) Upsert(ctx context.Context, input domain.UpsertUserInput) (*domain.User, error) {
+func (r *UserRepo) Upsert(ctx context.Context, input models.UpsertUserInput) (*models.User, error) {
 	u, err := scanUser(r.pool.QueryRow(ctx,
 		`INSERT INTO users (sub, email, full_name)
 		 VALUES ($1, $2, $3)
@@ -48,12 +47,12 @@ func (r *UserRepo) Upsert(ctx context.Context, input domain.UpsertUserInput) (*d
 	return u, nil
 }
 
-func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	u, err := scanUser(r.pool.QueryRow(ctx,
 		`SELECT `+userCols+` FROM users WHERE id = $1 AND status != 'deleted'`, id,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting user: %w", err)
@@ -61,12 +60,12 @@ func (r *UserRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, err
 	return u, nil
 }
 
-func (r *UserRepo) GetBySub(ctx context.Context, sub string) (*domain.User, error) {
+func (r *UserRepo) GetBySub(ctx context.Context, sub string) (*models.User, error) {
 	u, err := scanUser(r.pool.QueryRow(ctx,
 		`SELECT `+userCols+` FROM users WHERE sub = $1 AND status != 'deleted'`, sub,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting user by sub: %w", err)
@@ -74,7 +73,7 @@ func (r *UserRepo) GetBySub(ctx context.Context, sub string) (*domain.User, erro
 	return u, nil
 }
 
-func (r *UserRepo) Update(ctx context.Context, id uuid.UUID, input domain.UpdateUserInput) (*domain.User, error) {
+func (r *UserRepo) Update(ctx context.Context, id uuid.UUID, input models.UpdateUserInput) (*models.User, error) {
 	existing, err := r.GetByID(ctx, id)
 	if err != nil {
 		return nil, err

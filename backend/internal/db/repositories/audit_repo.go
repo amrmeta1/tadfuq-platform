@@ -1,14 +1,13 @@
-package db
+package repositories
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type AuditLogRepo struct {
@@ -19,7 +18,7 @@ func NewAuditLogRepo(pool *pgxpool.Pool) *AuditLogRepo {
 	return &AuditLogRepo{pool: pool}
 }
 
-func (r *AuditLogRepo) Create(ctx context.Context, input domain.CreateAuditLogInput) error {
+func (r *AuditLogRepo) Create(ctx context.Context, input models.CreateAuditLogInput) error {
 	meta, err := json.Marshal(input.Metadata)
 	if err != nil {
 		meta = []byte("{}")
@@ -36,7 +35,7 @@ func (r *AuditLogRepo) Create(ctx context.Context, input domain.CreateAuditLogIn
 	return nil
 }
 
-func (r *AuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]domain.AuditLog, int, error) {
+func (r *AuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.AuditLog, int, error) {
 	var total int
 	err := r.pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1`, tenantID,
@@ -55,9 +54,9 @@ func (r *AuditLogRepo) ListByTenant(ctx context.Context, tenantID uuid.UUID, lim
 	}
 	defer rows.Close()
 
-	var logs []domain.AuditLog
+	var logs []models.AuditLog
 	for rows.Next() {
-		var l domain.AuditLog
+		var l models.AuditLog
 		var metaBytes []byte
 		if err := rows.Scan(&l.ID, &l.TenantID, &l.ActorSub, &l.Action, &l.EntityType, &l.EntityID, &metaBytes, &l.IPAddress, &l.UserAgent, &l.OccurredAt); err != nil {
 			return nil, 0, fmt.Errorf("scanning audit log: %w", err)

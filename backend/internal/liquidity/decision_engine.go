@@ -1,26 +1,25 @@
-package usecase
+package liquidity
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"sort"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 // DecisionEngine generates recommended treasury actions based on forecast and transaction analysis
 type DecisionEngine struct {
 	forecastUC *ForecastUseCase
-	txnRepo    domain.BankTransactionRepository
+	txnRepo    models.BankTransactionRepository
 }
 
 // NewDecisionEngine creates a new decision engine
 func NewDecisionEngine(
 	forecastUC *ForecastUseCase,
-	txnRepo domain.BankTransactionRepository,
+	txnRepo models.BankTransactionRepository,
 ) *DecisionEngine {
 	return &DecisionEngine{
 		forecastUC: forecastUC,
@@ -34,17 +33,17 @@ func NewDecisionEngine(
 func (d *DecisionEngine) RecommendActions(
 	ctx context.Context,
 	tenantID uuid.UUID,
-) ([]domain.TreasuryAction, error) {
+) ([]models.TreasuryAction, error) {
 	// Get forecast data
 	forecast, err := d.forecastUC.GenerateForecast(ctx, tenantID)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to generate forecast for decision engine")
-		return []domain.TreasuryAction{}, nil // graceful fallback
+		return []models.TreasuryAction{}, nil // graceful fallback
 	}
 
 	// If no forecast data, return empty
 	if len(forecast.Forecast) == 0 {
-		return []domain.TreasuryAction{}, nil
+		return []models.TreasuryAction{}, nil
 	}
 
 	// Get transaction data for last 30 days
@@ -52,14 +51,14 @@ func (d *DecisionEngine) RecommendActions(
 	from30 := now.AddDate(0, 0, -30)
 	from90 := now.AddDate(0, 0, -90)
 
-	filter30 := domain.TransactionFilter{
+	filter30 := models.TransactionFilter{
 		TenantID: tenantID,
 		From:     &from30,
 		To:       &now,
 		Limit:    10000,
 	}
 
-	filter90 := domain.TransactionFilter{
+	filter90 := models.TransactionFilter{
 		TenantID: tenantID,
 		From:     &from90,
 		To:       &now,
@@ -69,17 +68,17 @@ func (d *DecisionEngine) RecommendActions(
 	txns30, _, err := d.txnRepo.List(ctx, filter30)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to fetch 30-day transactions for decision engine")
-		txns30 = []domain.BankTransaction{} // continue with empty
+		txns30 = []models.BankTransaction{} // continue with empty
 	}
 
 	txns90, _, err := d.txnRepo.List(ctx, filter90)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to fetch 90-day transactions for decision engine")
-		txns90 = []domain.BankTransaction{} // continue with empty
+		txns90 = []models.BankTransaction{} // continue with empty
 	}
 
 	// Analyze and generate actions
-	var actions []domain.TreasuryAction
+	var actions []models.TreasuryAction
 
 	// Check liquidity risk
 	if d.hasLiquidityRisk(forecast) {
@@ -118,7 +117,7 @@ func (d *DecisionEngine) RecommendActions(
 
 // hasLiquidityRisk checks if forecast shows negative balance within 8 weeks
 // or if current cash is low relative to burn rate
-func (d *DecisionEngine) hasLiquidityRisk(forecast *domain.ForecastResult) bool {
+func (d *DecisionEngine) hasLiquidityRisk(forecast *models.ForecastResult) bool {
 	// Check if any of the first 8 weeks shows negative balance
 	for i := 0; i < len(forecast.Forecast) && i < 8; i++ {
 		if forecast.Forecast[i].Baseline < 0 {
@@ -139,9 +138,9 @@ func (d *DecisionEngine) hasLiquidityRisk(forecast *domain.ForecastResult) bool 
 
 // hasRevenueWeakness checks if inflows are declining
 func (d *DecisionEngine) hasRevenueWeakness(
-	forecast *domain.ForecastResult,
-	txns30 []domain.BankTransaction,
-	txns90 []domain.BankTransaction,
+	forecast *models.ForecastResult,
+	txns30 []models.BankTransaction,
+	txns90 []models.BankTransaction,
 ) bool {
 	// Calculate average daily inflow for last 30 days
 	var inflow30 float64
@@ -170,7 +169,7 @@ func (d *DecisionEngine) hasRevenueWeakness(
 }
 
 // hasCostPressure checks if outflows exceed inflows significantly
-func (d *DecisionEngine) hasCostPressure(forecast *domain.ForecastResult) bool {
+func (d *DecisionEngine) hasCostPressure(forecast *models.ForecastResult) bool {
 	// Check if daily outflows exceed inflows by 20% or more
 	if forecast.Metrics.AvgDailyInflow > 0 {
 		ratio := forecast.Metrics.AvgDailyOutflow / forecast.Metrics.AvgDailyInflow
@@ -183,11 +182,11 @@ func (d *DecisionEngine) hasCostPressure(forecast *domain.ForecastResult) bool {
 }
 
 // getLiquidityActions returns liquidity-focused actions
-func (d *DecisionEngine) getLiquidityActions() []domain.TreasuryAction {
-	return []domain.TreasuryAction{
+func (d *DecisionEngine) getLiquidityActions() []models.TreasuryAction {
+	return []models.TreasuryAction{
 		{
-			Type:        domain.ActionDelayVendorPayments,
-			Category:    domain.CategoryLiquidity,
+			Type:        models.ActionDelayVendorPayments,
+			Category:    models.CategoryLiquidity,
 			Title:       "Delay vendor payments",
 			Description: "Delay selected vendor payments by 5 days to improve near-term liquidity.",
 			Impact:      900000,
@@ -195,8 +194,8 @@ func (d *DecisionEngine) getLiquidityActions() []domain.TreasuryAction {
 			Currency:    "SAR",
 		},
 		{
-			Type:        domain.ActionMoveLiquidity,
-			Category:    domain.CategoryLiquidity,
+			Type:        models.ActionMoveLiquidity,
+			Category:    models.CategoryLiquidity,
 			Title:       "Move liquidity between accounts",
 			Description: "Transfer funds from low-activity accounts to optimize cash position.",
 			Impact:      400000,
@@ -207,11 +206,11 @@ func (d *DecisionEngine) getLiquidityActions() []domain.TreasuryAction {
 }
 
 // getRevenueActions returns revenue-focused actions
-func (d *DecisionEngine) getRevenueActions() []domain.TreasuryAction {
-	return []domain.TreasuryAction{
+func (d *DecisionEngine) getRevenueActions() []models.TreasuryAction {
+	return []models.TreasuryAction{
 		{
-			Type:        domain.ActionAccelerateReceivables,
-			Category:    domain.CategoryRevenue,
+			Type:        models.ActionAccelerateReceivables,
+			Category:    models.CategoryRevenue,
 			Title:       "Accelerate receivables collection",
 			Description: "Implement early payment incentives to speed up customer payments.",
 			Impact:      650000,
@@ -222,11 +221,11 @@ func (d *DecisionEngine) getRevenueActions() []domain.TreasuryAction {
 }
 
 // getCostReductionActions returns cost reduction actions
-func (d *DecisionEngine) getCostReductionActions() []domain.TreasuryAction {
-	return []domain.TreasuryAction{
+func (d *DecisionEngine) getCostReductionActions() []models.TreasuryAction {
+	return []models.TreasuryAction{
 		{
-			Type:        domain.ActionReduceMarketingSpend,
-			Category:    domain.CategoryCostReduction,
+			Type:        models.ActionReduceMarketingSpend,
+			Category:    models.CategoryCostReduction,
 			Title:       "Reduce marketing spend",
 			Description: "Cut discretionary marketing expenses by 15% for next quarter.",
 			Impact:      400000,
@@ -234,8 +233,8 @@ func (d *DecisionEngine) getCostReductionActions() []domain.TreasuryAction {
 			Currency:    "SAR",
 		},
 		{
-			Type:        domain.ActionDelayHiring,
-			Category:    domain.CategoryCostReduction,
+			Type:        models.ActionDelayHiring,
+			Category:    models.CategoryCostReduction,
 			Title:       "Delay non-critical hiring",
 			Description: "Postpone hiring for non-essential positions by one quarter.",
 			Impact:      250000,
@@ -243,8 +242,8 @@ func (d *DecisionEngine) getCostReductionActions() []domain.TreasuryAction {
 			Currency:    "SAR",
 		},
 		{
-			Type:        domain.ActionCutDiscretionarySpend,
-			Category:    domain.CategoryCostReduction,
+			Type:        models.ActionCutDiscretionarySpend,
+			Category:    models.CategoryCostReduction,
 			Title:       "Cut discretionary spending",
 			Description: "Reduce optional operational expenses and subscriptions.",
 			Impact:      150000,

@@ -1,6 +1,7 @@
-package db
+package repositories
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,19 +11,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 // analysisDataPayload is the JSONB shape for analysis_data column.
 type analysisDataPayload struct {
-	Liquidity         domain.LiquidityAnalysis  `json:"liquidity"`
-	ExpenseBreakdown  []domain.ExpenseBreakdown `json:"expense_breakdown"`
-	RecurringPayments []domain.RecurringPayment `json:"recurring_payments"`
-	CollectionHealth  domain.CollectionHealth  `json:"collection_health"`
+	Liquidity         models.LiquidityAnalysis  `json:"liquidity"`
+	ExpenseBreakdown  []models.ExpenseBreakdown `json:"expense_breakdown"`
+	RecurringPayments []models.RecurringPayment `json:"recurring_payments"`
+	CollectionHealth  models.CollectionHealth   `json:"collection_health"`
 }
 
-// AnalysisRepo implements domain.AnalysisRepository using PostgreSQL.
+// AnalysisRepo implements models.AnalysisRepository using PostgreSQL.
 type AnalysisRepo struct {
 	pool *pgxpool.Pool
 }
@@ -33,7 +32,7 @@ func NewAnalysisRepo(pool *pgxpool.Pool) *AnalysisRepo {
 }
 
 // Save persists a cash analysis. ID and CreatedAt are set from RETURNING if zero.
-func (r *AnalysisRepo) Save(ctx context.Context, analysis *domain.CashAnalysis) error {
+func (r *AnalysisRepo) Save(ctx context.Context, analysis *models.CashAnalysis) error {
 	payload := analysisDataPayload{
 		Liquidity:         analysis.Liquidity,
 		ExpenseBreakdown:  analysis.ExpenseBreakdown,
@@ -74,8 +73,8 @@ func (r *AnalysisRepo) Save(ctx context.Context, analysis *domain.CashAnalysis) 
 	return nil
 }
 
-// GetLatest returns the most recent analysis for the tenant, or domain.ErrNotFound.
-func (r *AnalysisRepo) GetLatest(ctx context.Context, tenantID uuid.UUID) (*domain.CashAnalysis, error) {
+// GetLatest returns the most recent analysis for the tenant, or models.ErrNotFound.
+func (r *AnalysisRepo) GetLatest(ctx context.Context, tenantID uuid.UUID) (*models.CashAnalysis, error) {
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, tenant_id, analyzed_at, health_score, risk_level, runway_days, analysis_data, recommendations, transaction_count, created_at
 		 FROM cash_analyses
@@ -84,14 +83,14 @@ func (r *AnalysisRepo) GetLatest(ctx context.Context, tenantID uuid.UUID) (*doma
 		 LIMIT 1`,
 		tenantID,
 	)
-	var a domain.CashAnalysis
+	var a models.CashAnalysis
 	var analyzedAt, createdAt time.Time
 	var healthScore, runwayDays, txnCount *int
 	var riskLevel string
 	var analysisDataBytes, recsBytes []byte
 	err := row.Scan(&a.ID, &a.TenantID, &analyzedAt, &healthScore, &riskLevel, &runwayDays, &analysisDataBytes, &recsBytes, &txnCount, &createdAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting latest cash_analysis: %w", err)
@@ -101,7 +100,7 @@ func (r *AnalysisRepo) GetLatest(ctx context.Context, tenantID uuid.UUID) (*doma
 	if healthScore != nil {
 		a.HealthScore = *healthScore
 	}
-	a.RiskLevel = domain.RiskLevel(riskLevel)
+	a.RiskLevel = models.RiskLevel(riskLevel)
 	if runwayDays != nil {
 		a.RunwayDays = *runwayDays
 	}
@@ -125,7 +124,7 @@ func (r *AnalysisRepo) GetLatest(ctx context.Context, tenantID uuid.UUID) (*doma
 }
 
 // GetTransactionsForAnalysis returns all transactions for the tenant ordered by date ascending, with RunningBalance computed.
-func (r *AnalysisRepo) GetTransactionsForAnalysis(ctx context.Context, tenantID uuid.UUID) ([]domain.TransactionForAnalysis, error) {
+func (r *AnalysisRepo) GetTransactionsForAnalysis(ctx context.Context, tenantID uuid.UUID) ([]models.TransactionForAnalysis, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT txn_date, description, amount, category, counterparty
 		 FROM bank_transactions
@@ -138,10 +137,10 @@ func (r *AnalysisRepo) GetTransactionsForAnalysis(ctx context.Context, tenantID 
 	}
 	defer rows.Close()
 
-	var out []domain.TransactionForAnalysis
+	var out []models.TransactionForAnalysis
 	var runningBalance float64
 	for rows.Next() {
-		var t domain.TransactionForAnalysis
+		var t models.TransactionForAnalysis
 		var txnDate time.Time
 		if err := rows.Scan(&txnDate, &t.Description, &t.Amount, &t.Category, &t.Counterparty); err != nil {
 			return nil, fmt.Errorf("scanning transaction: %w", err)

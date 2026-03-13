@@ -1,4 +1,4 @@
-package domain
+package models
 
 import (
 	"time"
@@ -58,17 +58,19 @@ type Recommendation struct {
 }
 
 type CashAnalysis struct {
-	ID                 uuid.UUID
-	TenantID           uuid.UUID
-	AnalyzedAt         time.Time
-	HealthScore        int // 0-100
-	RiskLevel          RiskLevel
-	RunwayDays         int
-	Liquidity          LiquidityAnalysis
-	ExpenseBreakdown   []ExpenseBreakdown
-	RecurringPayments  []RecurringPayment
-	CollectionHealth   CollectionHealth
-	Recommendations    []Recommendation
-	TransactionCount   int
-	CreatedAt          time.Time
+	ID                uuid.UUID
+	TenantID          uuid.UUID
+	AnalyzedAt        time.Time
+	HealthScore       int // 0-100
+	RiskLevel         RiskLevel
+	RunwayDays        int
+	Liquidity         LiquidityAnalysis
+	ExpenseBreakdown  []ExpenseBreakdown
+	RecurringPayments []RecurringPayment
+	CollectionHealth  CollectionHealth
+	Recommendations   []Recommendation
+	TransactionCount  int
+	SourceReference   string // Reference to source data or trigger
+	AnalysisVersion   string // Analysis algorithm version
+	CreatedAt         time.Time
 }

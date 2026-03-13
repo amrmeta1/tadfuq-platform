@@ -1,13 +1,13 @@
-package db
+package repositories
 
 import (
+"encoding/json"
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type RawBankTransactionRepo struct {
@@ -18,13 +18,13 @@ func NewRawBankTransactionRepo(pool *pgxpool.Pool) *RawBankTransactionRepo {
 	return &RawBankTransactionRepo{pool: pool}
 }
 
-func (r *RawBankTransactionRepo) Create(ctx context.Context, tenantID uuid.UUID, source string, payload map[string]any) (*domain.RawBankTransaction, error) {
-	var raw domain.RawBankTransaction
+func (r *RawBankTransactionRepo) Create(ctx context.Context, tenantID uuid.UUID, source string, payload map[string]any) (*models.RawBankTransaction, error) {
+	var raw models.RawBankTransaction
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO raw_bank_transactions (tenant_id, source, raw_payload)
 		VALUES ($1, $2, $3)
 		RETURNING id, tenant_id, source, raw_payload, imported_at`,
-		tenantID, source, mapToJSON(payload),
+		tenantID, source, func() []byte { b, _ := json.Marshal(payload); return b }(),
 	).Scan(&raw.ID, &raw.TenantID, &raw.Source, &raw.RawPayload, &raw.ImportedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating raw bank transaction: %w", err)
@@ -46,7 +46,7 @@ func (r *RawBankTransactionRepo) BulkCreate(ctx context.Context, tenantID uuid.U
 			INSERT INTO raw_bank_transactions (tenant_id, source, raw_payload)
 			VALUES ($1, $2, $3)
 			RETURNING id`,
-			tenantID, source, mapToJSON(payload),
+			tenantID, source, func() []byte { b, _ := json.Marshal(payload); return b }(),
 		).Scan(&id)
 		if err != nil {
 			return nil, fmt.Errorf("inserting raw txn: %w", err)

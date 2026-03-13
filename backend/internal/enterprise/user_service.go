@@ -1,25 +1,25 @@
-package usecase
+package enterprise
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"fmt"
 
 	"github.com/google/uuid"
 
 	"github.com/finch-co/cashflow/internal/auth"
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type MemberUseCase struct {
-	users       domain.UserRepository
-	memberships domain.MembershipRepository
-	audit       domain.AuditLogRepository
+	users       models.UserRepository
+	memberships models.MembershipRepository
+	audit       models.AuditLogRepository
 }
 
 func NewMemberUseCase(
-	users domain.UserRepository,
-	memberships domain.MembershipRepository,
-	audit domain.AuditLogRepository,
+	users models.UserRepository,
+	memberships models.MembershipRepository,
+	audit models.AuditLogRepository,
 ) *MemberUseCase {
 	return &MemberUseCase{
 		users:       users,
@@ -29,22 +29,22 @@ func NewMemberUseCase(
 }
 
 // GetProfile returns the current authenticated user's profile.
-func (uc *MemberUseCase) GetProfile(ctx context.Context) (*domain.User, error) {
-	userID, ok := domain.UserIDFromContext(ctx)
+func (uc *MemberUseCase) GetProfile(ctx context.Context) (*models.User, error) {
+	userID, ok := models.UserIDFromContext(ctx)
 	if !ok {
-		return nil, domain.ErrUnauthorized
+		return nil, models.ErrUnauthorized
 	}
 	return uc.users.GetByID(ctx, userID)
 }
 
 // AddMember adds a user to a tenant with a given role.
-func (uc *MemberUseCase) AddMember(ctx context.Context, tenantID uuid.UUID, input domain.CreateMembershipInput) (*domain.Membership, error) {
+func (uc *MemberUseCase) AddMember(ctx context.Context, tenantID uuid.UUID, input models.CreateMembershipInput) (*models.Membership, error) {
 	if !uc.hasPermission(ctx, auth.PermMemberAdd) {
-		return nil, domain.ErrForbidden
+		return nil, models.ErrForbidden
 	}
 
-	if !domain.IsValidRole(input.Role) {
-		return nil, fmt.Errorf("%w: invalid role %q", domain.ErrValidation, input.Role)
+	if !models.IsValidRole(input.Role) {
+		return nil, fmt.Errorf("%w: invalid role %q", models.ErrValidation, input.Role)
 	}
 
 	// Verify the target user exists
@@ -57,11 +57,11 @@ func (uc *MemberUseCase) AddMember(ctx context.Context, tenantID uuid.UUID, inpu
 		return nil, err
 	}
 
-	sub, _ := domain.UserSubFromContext(ctx)
-	_ = uc.audit.Create(ctx, domain.CreateAuditLogInput{
+	sub, _ := models.UserSubFromContext(ctx)
+	_ = uc.audit.Create(ctx, models.CreateAuditLogInput{
 		TenantID:   &tenantID,
 		ActorSub:   sub,
-		Action:     domain.AuditMemberAdded,
+		Action:     models.AuditMemberAdded,
 		EntityType: "membership",
 		EntityID:   membership.ID.String(),
 		Metadata:   map[string]any{"user_id": input.UserID.String(), "role": input.Role},
@@ -71,9 +71,9 @@ func (uc *MemberUseCase) AddMember(ctx context.Context, tenantID uuid.UUID, inpu
 }
 
 // ListMembers lists all members of a tenant.
-func (uc *MemberUseCase) ListMembers(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]domain.Membership, int, error) {
+func (uc *MemberUseCase) ListMembers(ctx context.Context, tenantID uuid.UUID, limit, offset int) ([]models.Membership, int, error) {
 	if !uc.hasPermission(ctx, auth.PermMemberRead) {
-		return nil, 0, domain.ErrForbidden
+		return nil, 0, models.ErrForbidden
 	}
 	if limit <= 0 {
 		limit = 20
@@ -85,13 +85,13 @@ func (uc *MemberUseCase) ListMembers(ctx context.Context, tenantID uuid.UUID, li
 }
 
 // ChangeMemberRole updates a membership's role.
-func (uc *MemberUseCase) ChangeMemberRole(ctx context.Context, membershipID uuid.UUID, role string) (*domain.Membership, error) {
+func (uc *MemberUseCase) ChangeMemberRole(ctx context.Context, membershipID uuid.UUID, role string) (*models.Membership, error) {
 	if !uc.hasPermission(ctx, auth.PermMemberRoleChange) {
-		return nil, domain.ErrForbidden
+		return nil, models.ErrForbidden
 	}
 
-	if !domain.IsValidRole(role) {
-		return nil, fmt.Errorf("%w: invalid role %q", domain.ErrValidation, role)
+	if !models.IsValidRole(role) {
+		return nil, fmt.Errorf("%w: invalid role %q", models.ErrValidation, role)
 	}
 
 	membership, err := uc.memberships.UpdateRole(ctx, membershipID, role)
@@ -99,11 +99,11 @@ func (uc *MemberUseCase) ChangeMemberRole(ctx context.Context, membershipID uuid
 		return nil, err
 	}
 
-	sub, _ := domain.UserSubFromContext(ctx)
-	_ = uc.audit.Create(ctx, domain.CreateAuditLogInput{
+	sub, _ := models.UserSubFromContext(ctx)
+	_ = uc.audit.Create(ctx, models.CreateAuditLogInput{
 		TenantID:   &membership.TenantID,
 		ActorSub:   sub,
-		Action:     domain.AuditRoleChanged,
+		Action:     models.AuditRoleChanged,
 		EntityType: "membership",
 		EntityID:   membershipID.String(),
 		Metadata:   map[string]any{"new_role": role},
@@ -115,7 +115,7 @@ func (uc *MemberUseCase) ChangeMemberRole(ctx context.Context, membershipID uuid
 // RemoveMember removes a user from a tenant.
 func (uc *MemberUseCase) RemoveMember(ctx context.Context, membershipID uuid.UUID) error {
 	if !uc.hasPermission(ctx, auth.PermMemberRemove) {
-		return domain.ErrForbidden
+		return models.ErrForbidden
 	}
 
 	membership, err := uc.memberships.GetByID(ctx, membershipID)
@@ -127,11 +127,11 @@ func (uc *MemberUseCase) RemoveMember(ctx context.Context, membershipID uuid.UUI
 		return err
 	}
 
-	sub, _ := domain.UserSubFromContext(ctx)
-	_ = uc.audit.Create(ctx, domain.CreateAuditLogInput{
+	sub, _ := models.UserSubFromContext(ctx)
+	_ = uc.audit.Create(ctx, models.CreateAuditLogInput{
 		TenantID:   &membership.TenantID,
 		ActorSub:   sub,
-		Action:     domain.AuditMemberRemoved,
+		Action:     models.AuditMemberRemoved,
 		EntityType: "membership",
 		EntityID:   membershipID.String(),
 	})
@@ -140,7 +140,7 @@ func (uc *MemberUseCase) RemoveMember(ctx context.Context, membershipID uuid.UUI
 }
 
 func (uc *MemberUseCase) hasPermission(ctx context.Context, perm auth.Permission) bool {
-	roles := domain.ClientRolesFromContext(ctx)
+	roles := models.ClientRolesFromContext(ctx)
 	perms := auth.ResolvePermissions(roles)
 	return auth.HasPermission(perms, perm)
 }

@@ -1,4 +1,4 @@
-package domain
+package models
 
 import (
 	"time"
@@ -15,14 +15,14 @@ const (
 )
 
 type Tenant struct {
-	ID        uuid.UUID        `json:"id"`
-	Name      string           `json:"name"`
-	Slug      string           `json:"slug"`
-	Plan      string           `json:"plan"`
-	Status    TenantStatus     `json:"status"`
-	Metadata  map[string]any   `json:"metadata"`
-	CreatedAt time.Time        `json:"created_at"`
-	UpdatedAt time.Time        `json:"updated_at"`
+	ID        uuid.UUID      `json:"id"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Plan      string         `json:"plan"`
+	Status    TenantStatus   `json:"status"`
+	Metadata  map[string]any `json:"metadata"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
 }
 
 type CreateTenantInput struct {

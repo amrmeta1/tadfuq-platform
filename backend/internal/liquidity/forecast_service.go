@@ -1,26 +1,25 @@
-package usecase
+package liquidity
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"fmt"
 	"math"
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 // ForecastUseCase handles cash flow forecasting logic.
 type ForecastUseCase struct {
-	txnRepo     domain.BankTransactionRepository
-	accountRepo domain.BankAccountRepository
+	txnRepo     models.BankTransactionRepository
+	accountRepo models.BankAccountRepository
 }
 
 // NewForecastUseCase creates a new forecast use case.
 func NewForecastUseCase(
-	txnRepo domain.BankTransactionRepository,
-	accountRepo domain.BankAccountRepository,
+	txnRepo models.BankTransactionRepository,
+	accountRepo models.BankAccountRepository,
 ) *ForecastUseCase {
 	return &ForecastUseCase{
 		txnRepo:     txnRepo,
@@ -30,12 +29,12 @@ func NewForecastUseCase(
 
 // GenerateForecast generates a 13-week cash forecast for the given tenant.
 // Returns an empty forecast (not mock data) if no transactions exist.
-func (uc *ForecastUseCase) GenerateForecast(ctx context.Context, tenantID uuid.UUID) (*domain.ForecastResult, error) {
+func (uc *ForecastUseCase) GenerateForecast(ctx context.Context, tenantID uuid.UUID) (*models.ForecastResult, error) {
 	now := time.Now().UTC()
 	from := now.AddDate(0, 0, -90) // Last 90 days
 
 	// Fetch transactions for the last 90 days
-	filter := domain.TransactionFilter{
+	filter := models.TransactionFilter{
 		TenantID: tenantID,
 		From:     &from,
 		To:       &now,
@@ -50,11 +49,11 @@ func (uc *ForecastUseCase) GenerateForecast(ctx context.Context, tenantID uuid.U
 
 	// Empty state: no transactions
 	if len(txns) == 0 {
-		return &domain.ForecastResult{
+		return &models.ForecastResult{
 			TenantID:    tenantID,
 			GeneratedAt: now,
-			Metrics:     domain.ForecastMetrics{},
-			Forecast:    []domain.ForecastPoint{},
+			Metrics:     models.ForecastMetrics{},
+			Forecast:    []models.ForecastPoint{},
 			Confidence:  0.0,
 		}, nil
 	}
@@ -71,7 +70,7 @@ func (uc *ForecastUseCase) GenerateForecast(ctx context.Context, tenantID uuid.U
 	// Generate 13-week forecast
 	forecast := uc.generateWeeklyForecast(metrics)
 
-	return &domain.ForecastResult{
+	return &models.ForecastResult{
 		TenantID:    tenantID,
 		GeneratedAt: now,
 		Metrics:     metrics,
@@ -95,9 +94,9 @@ func (uc *ForecastUseCase) computeCurrentCash(ctx context.Context, tenantID uuid
 }
 
 // computeMetrics calculates statistical metrics from transaction history.
-func (uc *ForecastUseCase) computeMetrics(txns []domain.BankTransaction, currentCash float64) domain.ForecastMetrics {
+func (uc *ForecastUseCase) computeMetrics(txns []models.BankTransaction, currentCash float64) models.ForecastMetrics {
 	if len(txns) == 0 {
-		return domain.ForecastMetrics{
+		return models.ForecastMetrics{
 			CurrentCash:      currentCash,
 			TransactionCount: 0,
 		}
@@ -126,7 +125,7 @@ func (uc *ForecastUseCase) computeMetrics(txns []domain.BankTransaction, current
 	// Calculate trend rate (daily change from linear regression)
 	trendRate := uc.computeLinearTrend(dailyBalances)
 
-	return domain.ForecastMetrics{
+	return models.ForecastMetrics{
 		CurrentCash:      currentCash,
 		AvgDailyInflow:   avgDailyInflow,
 		AvgDailyOutflow:  avgDailyOutflow,
@@ -169,7 +168,7 @@ func (uc *ForecastUseCase) computeLinearTrend(dailyBalances []float64) float64 {
 }
 
 // buildDailyBalances constructs a daily balance series for the last N days.
-func (uc *ForecastUseCase) buildDailyBalances(txns []domain.BankTransaction, currentCash float64, days int) []float64 {
+func (uc *ForecastUseCase) buildDailyBalances(txns []models.BankTransaction, currentCash float64, days int) []float64 {
 	if len(txns) == 0 {
 		return []float64{}
 	}
@@ -229,9 +228,9 @@ func (uc *ForecastUseCase) calculateStdDev(values []float64) float64 {
 }
 
 // generateWeeklyForecast creates 13 weekly forecast points with confidence bounds.
-func (uc *ForecastUseCase) generateWeeklyForecast(metrics domain.ForecastMetrics) []domain.ForecastPoint {
+func (uc *ForecastUseCase) generateWeeklyForecast(metrics models.ForecastMetrics) []models.ForecastPoint {
 	const numWeeks = 13
-	forecast := make([]domain.ForecastPoint, numWeeks)
+	forecast := make([]models.ForecastPoint, numWeeks)
 
 	for week := 1; week <= numWeeks; week++ {
 		days := float64(week * 7)
@@ -244,7 +243,7 @@ func (uc *ForecastUseCase) generateWeeklyForecast(metrics domain.ForecastMetrics
 		upperBound := baseline + metrics.StdDev
 		lowerBound := baseline - metrics.StdDev
 
-		forecast[week-1] = domain.ForecastPoint{
+		forecast[week-1] = models.ForecastPoint{
 			WeekNumber: week,
 			Baseline:   baseline,
 			UpperBound: upperBound,

@@ -1,6 +1,7 @@
-package db
+package repositories
 
 import (
+"github.com/finch-co/cashflow/internal/models"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,8 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/finch-co/cashflow/internal/domain"
 )
 
 type TenantRepo struct {
@@ -21,7 +20,7 @@ func NewTenantRepo(pool *pgxpool.Pool) *TenantRepo {
 	return &TenantRepo{pool: pool}
 }
 
-func (r *TenantRepo) Create(ctx context.Context, input domain.CreateTenantInput) (*domain.Tenant, error) {
+func (r *TenantRepo) Create(ctx context.Context, input models.CreateTenantInput) (*models.Tenant, error) {
 	meta, err := json.Marshal(input.Metadata)
 	if err != nil {
 		meta = []byte("{}")
@@ -32,7 +31,7 @@ func (r *TenantRepo) Create(ctx context.Context, input domain.CreateTenantInput)
 		plan = "free"
 	}
 
-	var t domain.Tenant
+	var t models.Tenant
 	var metaBytes []byte
 	err = r.pool.QueryRow(ctx,
 		`INSERT INTO tenants (name, slug, plan, metadata)
@@ -47,15 +46,15 @@ func (r *TenantRepo) Create(ctx context.Context, input domain.CreateTenantInput)
 	return &t, nil
 }
 
-func (r *TenantRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant, error) {
-	var t domain.Tenant
+func (r *TenantRepo) GetByID(ctx context.Context, id uuid.UUID) (*models.Tenant, error) {
+	var t models.Tenant
 	var metaBytes []byte
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, name, slug, plan, status, metadata, created_at, updated_at
 		 FROM tenants WHERE id = $1 AND status != 'deleted'`, id,
 	).Scan(&t.ID, &t.Name, &t.Slug, &t.Plan, &t.Status, &metaBytes, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting tenant: %w", err)
@@ -64,15 +63,15 @@ func (r *TenantRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tenant,
 	return &t, nil
 }
 
-func (r *TenantRepo) GetBySlug(ctx context.Context, slug string) (*domain.Tenant, error) {
-	var t domain.Tenant
+func (r *TenantRepo) GetBySlug(ctx context.Context, slug string) (*models.Tenant, error) {
+	var t models.Tenant
 	var metaBytes []byte
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, name, slug, plan, status, metadata, created_at, updated_at
 		 FROM tenants WHERE slug = $1 AND status != 'deleted'`, slug,
 	).Scan(&t.ID, &t.Name, &t.Slug, &t.Plan, &t.Status, &metaBytes, &t.CreatedAt, &t.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, domain.ErrNotFound
+		return nil, models.ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting tenant by slug: %w", err)
@@ -81,7 +80,7 @@ func (r *TenantRepo) GetBySlug(ctx context.Context, slug string) (*domain.Tenant
 	return &t, nil
 }
 
-func (r *TenantRepo) List(ctx context.Context, limit, offset int) ([]domain.Tenant, int, error) {
+func (r *TenantRepo) List(ctx context.Context, limit, offset int) ([]models.Tenant, int, error) {
 	var total int
 	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM tenants WHERE status != 'deleted'`).Scan(&total)
 	if err != nil {
@@ -98,9 +97,9 @@ func (r *TenantRepo) List(ctx context.Context, limit, offset int) ([]domain.Tena
 	}
 	defer rows.Close()
 
-	var tenants []domain.Tenant
+	var tenants []models.Tenant
 	for rows.Next() {
-		var t domain.Tenant
+		var t models.Tenant
 		var metaBytes []byte
 		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &t.Plan, &t.Status, &metaBytes, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, 0, fmt.Errorf("scanning tenant: %w", err)
@@ -111,7 +110,7 @@ func (r *TenantRepo) List(ctx context.Context, limit, offset int) ([]domain.Tena
 	return tenants, total, nil
 }
 
-func (r *TenantRepo) Update(ctx context.Context, id uuid.UUID, input domain.UpdateTenantInput) (*domain.Tenant, error) {
+func (r *TenantRepo) Update(ctx context.Context, id uuid.UUID, input models.UpdateTenantInput) (*models.Tenant, error) {
 	existing, err := r.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -136,7 +135,7 @@ func (r *TenantRepo) Update(ctx context.Context, id uuid.UUID, input domain.Upda
 
 	meta, _ := json.Marshal(metadata)
 
-	var t domain.Tenant
+	var t models.Tenant
 	var metaBytes []byte
 	err = r.pool.QueryRow(ctx,
 		`UPDATE tenants SET name=$1, plan=$2, status=$3, metadata=$4, updated_at=now()
@@ -159,7 +158,7 @@ func (r *TenantRepo) Delete(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("deleting tenant: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return domain.ErrNotFound
+		return models.ErrNotFound
 	}
 	return nil
 }

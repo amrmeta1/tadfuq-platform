@@ -2,8 +2,8 @@
 -- Financial document ingestion, chunking, and vector search
 -- Managed by golang-migrate
 
--- Enable pgvector extension for vector similarity search
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Note: pgvector extension removed for compatibility
+-- Embeddings stored as TEXT (JSON array) for now
 
 -- ============================================================
 -- DOCUMENTS
@@ -13,7 +13,7 @@ CREATE TABLE documents (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     title       TEXT NOT NULL,
-    type        TEXT NOT NULL CHECK (type IN ('policy', 'contract', 'report', 'statement', 'faq')),
+    type        TEXT NOT NULL,
     file_name   TEXT,
     mime_type   TEXT,
     source      TEXT,
@@ -36,18 +36,13 @@ CREATE TABLE document_chunks (
     document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     chunk_index  INT NOT NULL,
     content      TEXT NOT NULL,
-    embedding    VECTOR(1536),
+    embedding    TEXT,
     metadata     JSONB NOT NULL DEFAULT '{}',
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_chunks_document ON document_chunks(document_id);
 CREATE INDEX idx_chunks_tenant ON document_chunks(tenant_id);
-
--- HNSW index for efficient vector similarity search
--- Using cosine distance for semantic similarity
-CREATE INDEX idx_chunks_embedding ON document_chunks 
-    USING hnsw (embedding vector_cosine_ops);
 
 -- ============================================================
 -- RAG_QUERIES

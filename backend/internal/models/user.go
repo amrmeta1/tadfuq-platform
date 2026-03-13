@@ -1,4 +1,4 @@
-package domain
+package models
 
 import (
 	"time"
@@ -18,7 +18,7 @@ const (
 // this record stores the Keycloak subject as the primary key (sub claim).
 type User struct {
 	ID          uuid.UUID  `json:"id"`
-	Sub         string     `json:"sub"`                    // Keycloak subject identifier
+	Sub         string     `json:"sub"` // Keycloak subject identifier
 	Email       string     `json:"email"`
 	FullName    string     `json:"full_name"`
 	AvatarURL   string     `json:"avatar_url,omitempty"`
