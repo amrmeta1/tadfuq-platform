@@ -39,6 +39,12 @@ type RouterDeps struct {
 	Analysis interface {
 		GetLatestAnalysis(http.ResponseWriter, *http.Request)
 	}
+	AnalysisEnhancements interface {
+		GetStatementHistory(http.ResponseWriter, *http.Request)
+		GetDataQuality(http.ResponseWriter, *http.Request)
+		GetSmartAlerts(http.ResponseWriter, *http.Request)
+		GetBankInsights(http.ResponseWriter, *http.Request)
+	}
 	RagQuery interface {
 		Query(http.ResponseWriter, *http.Request)
 	}
@@ -51,6 +57,13 @@ type RouterDeps struct {
 		CreateVendorRule(http.ResponseWriter, *http.Request)
 		ListVendorRules(http.ResponseWriter, *http.Request)
 	}
+	Vendors interface {
+		GetTopVendors(http.ResponseWriter, *http.Request)
+	}
+	CashFlowDNA interface {
+		GetPatterns(http.ResponseWriter, *http.Request)
+		TriggerAnalysis(http.ResponseWriter, *http.Request)
+	}
 	Signals interface {
 		RunSignalEngine(http.ResponseWriter, *http.Request)
 		GetSignals(http.ResponseWriter, *http.Request)
@@ -60,6 +73,10 @@ type RouterDeps struct {
 		GetCashStory(http.ResponseWriter, *http.Request)
 		GetRecommendedActions(http.ResponseWriter, *http.Request)
 	}
+	Ingestion interface {
+		ImportBankCSV(http.ResponseWriter, *http.Request)
+		ListBankAccounts(http.ResponseWriter, *http.Request)
+	}
 }
 
 func NewRouter(deps RouterDeps) http.Handler {
@@ -68,9 +85,27 @@ func NewRouter(deps RouterDeps) http.Handler {
 	// Global middleware
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
-	r.Use(middleware.RequestLogging)
+	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
-	r.Use(corsMiddleware)
+	r.Use(chimw.Compress(5))
+	r.Use(chimw.Timeout(60 * time.Second))
+
+	// CORS middleware for frontend
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-ID, X-Request-ID")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	})
 
 	// Health check (unauthenticated)
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -117,6 +152,14 @@ func NewRouter(deps RouterDeps) http.Handler {
 					r.Get("/analysis/latest", deps.Analysis.GetLatestAnalysis)
 				}
 
+				// Analysis Enhancements
+				if deps.AnalysisEnhancements != nil {
+					r.Get("/analysis/statement-history", deps.AnalysisEnhancements.GetStatementHistory)
+					r.Get("/analysis/data-quality", deps.AnalysisEnhancements.GetDataQuality)
+					r.Get("/analysis/smart-alerts", deps.AnalysisEnhancements.GetSmartAlerts)
+					r.Get("/analysis/bank-insights", deps.AnalysisEnhancements.GetBankInsights)
+				}
+
 				// RAG Query (AI Advisor)
 				if deps.RagQuery != nil {
 					r.Post("/rag/query", deps.RagQuery.Query)
@@ -148,13 +191,27 @@ func NewRouter(deps RouterDeps) http.Handler {
 				// Import endpoints (operations)
 				if deps.CashPosition != nil {
 					r.Post("/imports/bank-json", deps.CashPosition.ImportBankJSON)
-					r.Get("/bank-accounts", deps.CashPosition.ListBankAccounts)
+				}
+				if deps.Ingestion != nil {
+					r.Post("/imports/bank-csv", deps.Ingestion.ImportBankCSV)
+					r.Get("/bank-accounts", deps.Ingestion.ListBankAccounts)
 				}
 
 				// Vendor Learning Rules
 				if deps.VendorRules != nil {
 					r.Post("/vendor-rules", deps.VendorRules.CreateVendorRule)
 					r.Get("/vendor-rules", deps.VendorRules.ListVendorRules)
+				}
+
+				// Vendor Intelligence
+				if deps.Vendors != nil {
+					r.Get("/vendors/top", deps.Vendors.GetTopVendors)
+				}
+
+				// Cash Flow DNA
+				if deps.CashFlowDNA != nil {
+					r.Get("/cashflow/patterns", deps.CashFlowDNA.GetPatterns)
+					r.Post("/cashflow/analyze", deps.CashFlowDNA.TriggerAnalysis)
 				}
 			})
 		})

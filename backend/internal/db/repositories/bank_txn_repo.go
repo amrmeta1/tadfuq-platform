@@ -33,11 +33,11 @@ func (r *BankTransactionRepo) BulkUpsert(ctx context.Context, tenantID uuid.UUID
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO bank_transactions (
 				tenant_id, account_id, txn_date, amount, currency,
-				description, counterparty, category, hash, raw_id, vendor_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+				description, counterparty, category, hash, raw_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (tenant_id, hash) DO NOTHING`,
 			tenantID, t.AccountID, t.TxnDate, t.Amount, t.Currency,
-			t.Description, t.Counterparty, t.Category, t.Hash, t.RawID, t.VendorID,
+			t.Description, t.Counterparty, t.Category, t.Hash, t.RawID,
 		)
 		if err != nil {
 			return 0, fmt.Errorf("upserting transaction: %w", err)
@@ -200,4 +200,112 @@ func (r *BankTransactionRepo) GetLastNDaysSummary(ctx context.Context, tenantID 
 	summary.AvgDailyOutflow = summary.TotalOutflow / float64(days)
 
 	return summary, nil
+}
+
+// GetUnclassifiedTransactions retrieves transactions that haven't been AI-classified yet
+func (r *BankTransactionRepo) GetUnclassifiedTransactions(ctx context.Context, tenantID uuid.UUID, limit int) ([]models.BankTransaction, error) {
+	if limit <= 0 {
+		limit = 100 // Default batch size
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, tenant_id, account_id, txn_date, amount, currency, 
+		       description, counterparty, category, hash, raw_id,
+		       ai_vendor_name, ai_category, ai_confidence, ai_classified, created_at
+		FROM bank_transactions
+		WHERE tenant_id = $1 AND ai_classified = FALSE
+		ORDER BY created_at DESC
+		LIMIT $2`,
+		tenantID, limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("querying unclassified transactions: %w", err)
+	}
+	defer rows.Close()
+
+	var txns []models.BankTransaction
+	for rows.Next() {
+		var t models.BankTransaction
+		var txnDate time.Time
+		var createdAt time.Time
+		var rawID *uuid.UUID
+		var aiVendorName, aiCategory *string
+		var aiConfidence *float64
+		var aiClassified bool
+
+		if err := rows.Scan(
+			&t.ID, &t.TenantID, &t.AccountID, &txnDate, &t.Amount, &t.Currency,
+			&t.Description, &t.Counterparty, &t.Category, &t.Hash, &rawID,
+			&aiVendorName, &aiCategory, &aiConfidence, &aiClassified, &createdAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning transaction: %w", err)
+		}
+		t.TxnDate = txnDate
+		t.CreatedAt = createdAt
+		t.RawID = rawID
+		t.AIVendorName = aiVendorName
+		t.AICategory = aiCategory
+		if aiConfidence != nil {
+			t.AIConfidence = *aiConfidence
+		}
+		t.AIClassified = aiClassified
+		txns = append(txns, t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterating transactions: %w", err)
+	}
+
+	return txns, nil
+}
+
+// UpdateClassification updates AI classification for a single transaction
+func (r *BankTransactionRepo) UpdateClassification(ctx context.Context, txnID uuid.UUID, vendorName, category string, confidence float64) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE bank_transactions
+		SET ai_vendor_name = $1,
+		    ai_category = $2,
+		    ai_confidence = $3,
+		    ai_classified = TRUE
+		WHERE id = $4`,
+		vendorName, category, confidence, txnID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating classification: %w", err)
+	}
+	return nil
+}
+
+// BulkUpdateClassifications updates AI classification for multiple transactions in a single transaction
+func (r *BankTransactionRepo) BulkUpdateClassifications(ctx context.Context, classifications []models.TransactionClassification) error {
+	if len(classifications) == 0 {
+		return nil
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for _, c := range classifications {
+		_, err := tx.Exec(ctx, `
+			UPDATE bank_transactions
+			SET ai_vendor_name = $1,
+			    ai_category = $2,
+			    ai_confidence = $3,
+			    ai_classified = TRUE
+			WHERE id = $4`,
+			c.VendorName, c.Category, c.Confidence, c.ID,
+		)
+		if err != nil {
+			return fmt.Errorf("updating classification for txn %s: %w", c.ID, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing classifications: %w", err)
+	}
+
+	return nil
 }

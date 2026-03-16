@@ -12,10 +12,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/finch-co/cashflow/internal/ai"
 	"github.com/finch-co/cashflow/internal/auth"
 	"github.com/finch-co/cashflow/internal/config"
 	"github.com/finch-co/cashflow/internal/db"
 	"github.com/finch-co/cashflow/internal/db/repositories"
+	"github.com/finch-co/cashflow/internal/liquidity"
 	"github.com/finch-co/cashflow/internal/observability"
 	"github.com/finch-co/cashflow/internal/operations"
 )
@@ -84,6 +86,34 @@ func run() error {
 	jobRepo := repositories.NewIngestionJobRepo(pool)
 	idempotencyRepo := repositories.NewIdempotencyRepo(pool)
 
+	// Initialize Vendor Learning and Identity services
+	vendorRuleRepo := repositories.NewVendorRuleRepo(pool)
+	vendorLearning := operations.NewVendorLearningService(vendorRuleRepo)
+
+	vendorRepo := repositories.NewVendorRepo(pool)
+	vendorIdentity := operations.NewVendorIdentityService(vendorRepo)
+
+	// Initialize Vendor Stats service
+	vendorStatsRepo := repositories.NewVendorStatsRepo(pool)
+	vendorStats := operations.NewVendorStatsService(vendorStatsRepo)
+
+	// Initialize Cash Flow DNA service
+	cashFlowPatternRepo := repositories.NewCashFlowPatternRepo(pool)
+	cashFlowDNA := operations.NewCashFlowDNAService(cashFlowPatternRepo, bankTxnRepo)
+
+	// Initialize Forecast service
+	forecastUC := liquidity.NewForecastUseCase(bankTxnRepo, bankAccountRepo)
+
+	// Initialize Advisor service
+	advisorUC := liquidity.NewAdvisorUseCase()
+
+	// Initialize AI Transaction Classifier
+	classifier := ai.NewTransactionClassifier(bankTxnRepo)
+
+	// Initialize Analysis Service
+	analysisRepo := repositories.NewAnalysisRepo(pool)
+	analysisService := operations.NewAnalysisService(analysisRepo, bankTxnRepo)
+
 	// Init use case
 	ingestionUC := operations.NewUseCase(
 		bankAccountRepo,
@@ -92,6 +122,14 @@ func run() error {
 		jobRepo,
 		idempotencyRepo,
 		publisher,
+		vendorLearning,
+		vendorIdentity,
+		vendorStats,
+		cashFlowDNA,
+		forecastUC,
+		advisorUC,
+		classifier,
+		analysisService,
 	)
 
 	// Init HTTP handler

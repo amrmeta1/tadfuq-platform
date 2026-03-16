@@ -9,12 +9,16 @@ import (
 
 // AnalysisHandler provides cash flow analysis endpoints
 type AnalysisHandler struct {
-	txnRepo models.BankTransactionRepository
+	txnRepo      models.BankTransactionRepository
+	analysisRepo models.AnalysisRepository
 }
 
 // NewAnalysisHandler creates a new analysis handler
-func NewAnalysisHandler(txnRepo models.BankTransactionRepository) *AnalysisHandler {
-	return &AnalysisHandler{txnRepo: txnRepo}
+func NewAnalysisHandler(txnRepo models.BankTransactionRepository, analysisRepo models.AnalysisRepository) *AnalysisHandler {
+	return &AnalysisHandler{
+		txnRepo:      txnRepo,
+		analysisRepo: analysisRepo,
+	}
 }
 
 // CategorySummary represents aggregated data for a category
@@ -26,14 +30,14 @@ type CategorySummary struct {
 
 // AnalysisSummary is the response for the latest analysis
 type AnalysisSummary struct {
-	Inflows      float64           `json:"inflows"`
-	Outflows     float64           `json:"outflows"`
-	Net          float64           `json:"net"`
-	TopExpenses  []CategorySummary `json:"top_expenses"`
-	TopIncome    []CategorySummary `json:"top_income"`
-	PeriodStart  time.Time         `json:"period_start"`
-	PeriodEnd    time.Time         `json:"period_end"`
-	TxnCount     int               `json:"txn_count"`
+	Inflows     float64           `json:"inflows"`
+	Outflows    float64           `json:"outflows"`
+	Net         float64           `json:"net"`
+	TopExpenses []CategorySummary `json:"top_expenses"`
+	TopIncome   []CategorySummary `json:"top_income"`
+	PeriodStart time.Time         `json:"period_start"`
+	PeriodEnd   time.Time         `json:"period_end"`
+	TxnCount    int               `json:"txn_count"`
 }
 
 // GetLatestAnalysis handles GET /tenants/{tenantID}/analysis/latest
@@ -44,7 +48,30 @@ func (h *AnalysisHandler) GetLatestAnalysis(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Calculate last 30 days
+	// Try to get saved analysis from cash_analyses table first
+	if h.analysisRepo != nil {
+		savedAnalysis, err := h.analysisRepo.GetLatest(r.Context(), tenantID)
+		if err == nil && savedAnalysis != nil {
+			// Return saved analysis
+			WriteJSON(w, http.StatusOK, map[string]interface{}{
+				"data": map[string]interface{}{
+					"health_score":       savedAnalysis.HealthScore,
+					"risk_level":         savedAnalysis.RiskLevel,
+					"runway_days":        savedAnalysis.RunwayDays,
+					"analyzed_at":        savedAnalysis.AnalyzedAt,
+					"transaction_count":  savedAnalysis.TransactionCount,
+					"liquidity":          savedAnalysis.Liquidity,
+					"expense_breakdown":  savedAnalysis.ExpenseBreakdown,
+					"recurring_payments": savedAnalysis.RecurringPayments,
+					"collection_health":  savedAnalysis.CollectionHealth,
+					"recommendations":    savedAnalysis.Recommendations,
+				},
+			})
+			return
+		}
+	}
+
+	// Fallback: Calculate on-the-fly from transactions (for backward compatibility)
 	now := time.Now().UTC()
 	from := now.AddDate(0, 0, -30)
 
@@ -100,14 +127,14 @@ func (h *AnalysisHandler) GetLatestAnalysis(w http.ResponseWriter, r *http.Reque
 	topIncome := topNCategories(incomeByCategory, 5)
 
 	summary := AnalysisSummary{
-		Inflows:      totalInflows,
-		Outflows:     totalOutflows,
-		Net:          totalInflows - totalOutflows,
-		TopExpenses:  topExpenses,
-		TopIncome:    topIncome,
-		PeriodStart:  from,
-		PeriodEnd:    now,
-		TxnCount:     total,
+		Inflows:     totalInflows,
+		Outflows:    totalOutflows,
+		Net:         totalInflows - totalOutflows,
+		TopExpenses: topExpenses,
+		TopIncome:   topIncome,
+		PeriodStart: from,
+		PeriodEnd:   now,
+		TxnCount:    total,
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{

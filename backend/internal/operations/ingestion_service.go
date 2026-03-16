@@ -13,6 +13,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	"github.com/finch-co/cashflow/internal/ai"
+	"github.com/finch-co/cashflow/internal/ingestion/bank_parser"
+	"github.com/finch-co/cashflow/internal/liquidity"
 	"github.com/finch-co/cashflow/internal/models"
 )
 
@@ -20,14 +23,20 @@ import (
 // This package is a bounded context for the operations service; it can be extracted
 // into a separate service later with minimal change.
 type UseCase struct {
-	bankAccounts   models.BankAccountRepository
-	rawTxns        models.RawBankTransactionRepository
-	txns           models.BankTransactionRepository
-	jobs           models.IngestionJobRepository
-	idempotency    models.IdempotencyRepository
-	publisher      interface{}
-	vendorLearning *VendorLearningService
-	vendorIdentity *VendorIdentityService
+	bankAccounts    models.BankAccountRepository
+	rawTxns         models.RawBankTransactionRepository
+	txns            models.BankTransactionRepository
+	jobs            models.IngestionJobRepository
+	idempotency     models.IdempotencyRepository
+	publisher       interface{}
+	vendorLearning  *VendorLearningService
+	vendorIdentity  *VendorIdentityService
+	vendorStats     *VendorStatsService
+	cashFlowDNA     *CashFlowDNAService
+	forecastUC      *liquidity.ForecastUseCase
+	advisorUC       *liquidity.AdvisorUseCase
+	classifier      *ai.TransactionClassifier
+	analysisService *AnalysisService
 }
 
 // NewUseCase creates a new operations use case.
@@ -40,16 +49,28 @@ func NewUseCase(
 	publisher interface{},
 	vendorLearning *VendorLearningService,
 	vendorIdentity *VendorIdentityService,
+	vendorStats *VendorStatsService,
+	cashFlowDNA *CashFlowDNAService,
+	forecastUC *liquidity.ForecastUseCase,
+	advisorUC *liquidity.AdvisorUseCase,
+	classifier *ai.TransactionClassifier,
+	analysisService *AnalysisService,
 ) *UseCase {
 	return &UseCase{
-		bankAccounts:   bankAccounts,
-		rawTxns:        rawTxns,
-		txns:           txns,
-		jobs:           jobs,
-		idempotency:    idempotency,
-		publisher:      publisher,
-		vendorLearning: vendorLearning,
-		vendorIdentity: vendorIdentity,
+		bankAccounts:    bankAccounts,
+		rawTxns:         rawTxns,
+		txns:            txns,
+		jobs:            jobs,
+		idempotency:     idempotency,
+		publisher:       publisher,
+		vendorLearning:  vendorLearning,
+		vendorIdentity:  vendorIdentity,
+		vendorStats:     vendorStats,
+		cashFlowDNA:     cashFlowDNA,
+		forecastUC:      forecastUC,
+		advisorUC:       advisorUC,
+		classifier:      classifier,
+		analysisService: analysisService,
 	}
 }
 
@@ -63,9 +84,59 @@ type CSVImportResult struct {
 	ErrorDetail []string  `json:"error_detail,omitempty"`
 }
 
+// ensureDefaultBankAccount creates a default bank account if none exists for the tenant
+func (uc *UseCase) ensureDefaultBankAccount(ctx context.Context, tenantID uuid.UUID, currency string) (uuid.UUID, error) {
+	// Check if tenant has any accounts
+	accounts, _, err := uc.bankAccounts.ListByTenant(ctx, tenantID, 1, 0)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("checking existing accounts: %w", err)
+	}
+
+	// If accounts exist, return the first one
+	if len(accounts) > 0 {
+		return accounts[0].ID, nil
+	}
+
+	// No accounts exist - create default account
+	if currency == "" {
+		currency = "QAR" // Default to Qatari Riyal
+	}
+
+	account, err := uc.bankAccounts.Create(ctx, tenantID, models.CreateBankAccountInput{
+		Provider:   "imported",
+		ExternalID: fmt.Sprintf("auto-%s", uuid.New().String()[:8]),
+		Currency:   currency,
+		Nickname:   "Primary Account",
+		Metadata: map[string]any{
+			"auto_created": true,
+			"source":       "csv_import",
+		},
+	})
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("creating default account: %w", err)
+	}
+
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("account_id", account.ID.String()).
+		Str("currency", currency).
+		Msg("auto-created default bank account")
+
+	return account.ID, nil
+}
+
 // ImportBankCSV processes a CSV file upload containing bank transactions.
 // Expected CSV columns: date, amount, currency, description, counterparty, category
 func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.UUID, reader io.Reader) (*CSVImportResult, error) {
+	// If accountID is nil, auto-create or use existing default account
+	if accountID == uuid.Nil {
+		var err error
+		accountID, err = uc.ensureDefaultBankAccount(ctx, tenantID, "") // Currency will be detected from CSV
+		if err != nil {
+			return nil, fmt.Errorf("ensuring default account: %w", err)
+		}
+	}
+
 	_, err := uc.bankAccounts.GetByID(ctx, tenantID, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("bank account not found: %w", err)
@@ -94,15 +165,30 @@ func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.U
 		return nil, fmt.Errorf("reading CSV header: %w", err)
 	}
 
+	log.Info().
+		Strs("headers", header).
+		Msg("csv headers read")
+
 	colMap := buildColumnMap(header)
 
-	required := []string{"date", "amount"}
-	for _, col := range required {
-		if _, ok := colMap[col]; !ok {
-			errMsg := fmt.Sprintf("missing required column: %s", col)
-			_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusFailed, errMsg)
-			return nil, fmt.Errorf("%w: %s", models.ErrValidation, errMsg)
-		}
+	// Use Document Detection Engine to identify file type
+	detector := NewDocumentDetector()
+	docType, err := detector.DetectCSVType(header, colMap)
+	if err != nil {
+		_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusFailed, err.Error())
+		return nil, fmt.Errorf("%w: %s", models.ErrValidation, err.Error())
+	}
+
+	log.Info().
+		Str("document_type", string(docType)).
+		Str("document_name", detector.GetDocumentTypeString(docType)).
+		Strs("columns", header).
+		Msg("document type detected")
+
+	// Validate required columns for detected document type
+	if err := detector.ValidateColumns(docType, colMap, header); err != nil {
+		_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusFailed, err.Error())
+		return nil, fmt.Errorf("%w: %s", models.ErrValidation, err.Error())
 	}
 
 	var rawPayloads []map[string]any
@@ -123,6 +209,11 @@ func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.U
 
 		result.TotalRows++
 
+		log.Debug().
+			Int("row", lineNum).
+			Strs("row_values", record).
+			Msg("processing csv row")
+
 		rawPayload := make(map[string]any)
 		for i, val := range record {
 			if i < len(header) {
@@ -131,24 +222,65 @@ func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.U
 		}
 		rawPayloads = append(rawPayloads, rawPayload)
 
-		txn, err := parseCSVRow(record, colMap, tenantID, accountID)
+		// Parse based on detected document type
+		var txn *models.BankTransaction
+		switch docType {
+		case DocumentTypeLedger:
+			txn, err = parseLedgerRow(record, colMap, tenantID, accountID, lineNum)
+		case DocumentTypeBankStatement:
+			txn, err = parseCSVRow(record, colMap, tenantID, accountID, lineNum)
+		default:
+			err = fmt.Errorf("unsupported document type: %s", docType)
+		}
+
 		if err != nil {
 			result.Errors++
+			log.Warn().
+				Int("row", lineNum).
+				Err(err).
+				Msg("failed to parse row")
 			result.ErrorDetail = append(result.ErrorDetail, fmt.Sprintf("line %d: %s", lineNum, err.Error()))
 			continue
 		}
+		log.Debug().
+			Int("row", lineNum).
+			Float64("amount", txn.Amount).
+			Str("description", txn.Description).
+			Msg("row parsed successfully")
 		normalizedTxns = append(normalizedTxns, *txn)
 	}
 
+	log.Info().
+		Int("total_rows", result.TotalRows).
+		Int("parsed_transactions", len(normalizedTxns)).
+		Int("errors", result.Errors).
+		Msg("CSV parsing completed")
+
 	if len(normalizedTxns) == 0 {
-		_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusCompleted, "")
-		return result, nil
+		log.Error().
+			Int("total_rows", result.TotalRows).
+			Int("errors", result.Errors).
+			Strs("error_details", result.ErrorDetail).
+			Msg("no transactions parsed from file")
+		errMsg := fmt.Sprintf("no valid transactions found (total rows: %d, errors: %d)", result.TotalRows, result.Errors)
+		log.Error().Msg(errMsg)
+		_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusFailed, errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
 	}
+
+	log.Info().
+		Int("transactions_ready", len(normalizedTxns)).
+		Str("tenant_id", tenantID.String()).
+		Str("account_id", accountID.String()).
+		Msg("transactions ready for insertion")
 
 	rawIDs, err := uc.rawTxns.BulkCreate(ctx, tenantID, "csv", rawPayloads)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to store raw transactions")
 	} else {
+		log.Debug().
+			Int("raw_ids_created", len(rawIDs)).
+			Msg("raw transactions stored")
 		for i := range normalizedTxns {
 			if i < len(rawIDs) {
 				id := rawIDs[i]
@@ -159,6 +291,7 @@ func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.U
 
 	inserted, err := uc.txns.BulkUpsert(ctx, tenantID, normalizedTxns)
 	if err != nil {
+		log.Error().Err(err).Msg("BulkUpsert failed")
 		_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusFailed, err.Error())
 		return nil, fmt.Errorf("upserting transactions: %w", err)
 	}
@@ -166,9 +299,79 @@ func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.U
 	result.Inserted = inserted
 	result.Duplicates = len(normalizedTxns) - inserted - result.Errors
 
+	log.Info().
+		Int("expected", len(normalizedTxns)).
+		Int("inserted", inserted).
+		Int("duplicates", result.Duplicates).
+		Str("tenant_id", tenantID.String()).
+		Str("account_id", accountID.String()).
+		Msg("database insertion completed")
+
 	_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusCompleted, "")
 
-	// TODO: Publish event when publisher is implemented
+	// Trigger async treasury pipeline after successful import
+	if inserted > 0 {
+		go func() {
+			bgCtx := context.Background()
+
+			log.Info().
+				Str("tenant_id", tenantID.String()).
+				Int("imported", inserted).
+				Msg("treasury pipeline started")
+
+			// 0. AI Classification - classify transactions (runs first)
+			if uc.classifier != nil {
+				log.Info().Msg("AI classification started")
+				if err := uc.classifier.ClassifyTransactions(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("AI classification failed")
+				}
+				// Note: classifier logs "transactions classified" internally
+			}
+
+			// 1. Vendor Stats - update spending analytics
+			if uc.vendorStats != nil {
+				if err := uc.vendorStats.UpdateStatsForTransactions(bgCtx, tenantID, normalizedTxns); err != nil {
+					log.Error().Err(err).Msg("vendor stats update failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("vendor stats updated")
+				}
+			}
+
+			// 2. Cash Flow DNA - detect recurring patterns
+			if uc.cashFlowDNA != nil {
+				if err := uc.cashFlowDNA.AnalyzePatterns(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("cashflow DNA analysis failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("cashflow patterns detected")
+				}
+			}
+
+			// 3. Forecast Engine - recalculate 13-week forecast
+			if uc.forecastUC != nil {
+				if _, err := uc.forecastUC.GenerateForecast(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("forecast recalculation failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("forecast recalculated")
+				}
+			}
+
+			// 4. Advisor Engine - analyze liquidity
+			if uc.advisorUC != nil {
+				if err := uc.advisorUC.AnalyzeLiquidity(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("liquidity analysis failed")
+				}
+			}
+
+			// 5. Analysis Service - generate cash analysis
+			if uc.analysisService != nil {
+				if err := uc.analysisService.GenerateAnalysis(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("cash analysis generation failed")
+				}
+			}
+
+			log.Info().Str("tenant_id", tenantID.String()).Msg("treasury pipeline completed")
+		}()
+	}
 
 	return result, nil
 }
@@ -176,6 +379,18 @@ func (uc *UseCase) ImportBankCSV(ctx context.Context, tenantID, accountID uuid.U
 // ImportBankJSON processes a JSON payload containing structured bank transactions.
 // Supports deduplication via SHA256 hash: {tenant_id}|{account_id}|{date}|{amount}|{description}
 func (uc *UseCase) ImportBankJSON(ctx context.Context, tenantID uuid.UUID, payload models.ImportBankJSONPayload) (*models.JSONImportResult, error) {
+	// If accountID is nil, auto-create or use existing default account
+	accountID := payload.AccountID
+	if accountID == uuid.Nil {
+		var err error
+		accountID, err = uc.ensureDefaultBankAccount(ctx, tenantID, "")
+		if err != nil {
+			return nil, fmt.Errorf("ensuring default account: %w", err)
+		}
+		// Update payload with the account ID
+		payload.AccountID = accountID
+	}
+
 	_, err := uc.bankAccounts.GetByID(ctx, tenantID, payload.AccountID)
 	if err != nil {
 		return nil, fmt.Errorf("bank account not found: %w", err)
@@ -329,41 +544,310 @@ func (uc *UseCase) ImportBankJSON(ctx context.Context, tenantID uuid.UUID, paylo
 	if inserted > 0 {
 		go func() {
 			// Create background context (don't use request context)
-			_ = context.Background()
+			bgCtx := context.Background()
 
 			log.Info().
 				Str("tenant_id", tenantID.String()).
 				Int("imported", inserted).
-				Msg("triggering async treasury engines after import")
+				Msg("treasury pipeline started")
 
-			// TODO: Uncomment when engines are available
-			// Signal Engine - detect anomalies and alerts
-			// if uc.signalEngine != nil {
-			//     if err := uc.signalEngine.Run(bgCtx, tenantID); err != nil {
-			//         log.Error().Err(err).Msg("signal engine failed")
-			//     }
-			// }
+			// 0. AI Classification - classify transactions (runs first)
+			if uc.classifier != nil {
+				log.Info().Msg("AI classification started")
+				if err := uc.classifier.ClassifyTransactions(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("AI classification failed")
+				}
+				// Note: classifier logs "transactions classified" internally
+			}
 
-			// Forecast Engine - recompute 13-week forecast
-			// if uc.forecastEngine != nil {
-			//     if err := uc.forecastEngine.Recompute(bgCtx, tenantID); err != nil {
-			//         log.Error().Err(err).Msg("forecast engine failed")
-			//     }
-			// }
+			// 1. Vendor Stats - update spending analytics
+			if uc.vendorStats != nil {
+				if err := uc.vendorStats.UpdateStatsForTransactions(bgCtx, tenantID, normalizedTxns); err != nil {
+					log.Error().Err(err).Msg("vendor stats update failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("vendor stats updated")
+				}
+			}
 
-			// Insights Engine - generate AI insights
-			// if uc.insightsEngine != nil {
-			//     if err := uc.insightsEngine.Generate(bgCtx, tenantID); err != nil {
-			//         log.Error().Err(err).Msg("insights engine failed")
-			//     }
-			// }
+			// 2. Cash Flow DNA - detect recurring patterns
+			if uc.cashFlowDNA != nil {
+				if err := uc.cashFlowDNA.AnalyzePatterns(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("cashflow DNA analysis failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("cashflow patterns detected")
+				}
+			}
 
-			// Daily Brief - refresh treasury brief
-			// if uc.briefEngine != nil {
-			//     if err := uc.briefEngine.Refresh(bgCtx, tenantID); err != nil {
-			//         log.Error().Err(err).Msg("brief engine failed")
-			//     }
-			// }
+			// 3. Forecast Engine - recalculate 13-week forecast
+			if uc.forecastUC != nil {
+				if _, err := uc.forecastUC.GenerateForecast(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("forecast recalculation failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("forecast recalculated")
+				}
+			}
+
+			// 4. Advisor Engine - analyze liquidity
+			if uc.advisorUC != nil {
+				if err := uc.advisorUC.AnalyzeLiquidity(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("liquidity analysis failed")
+				}
+				// Note: advisorUC logs "liquidity analysis completed" internally
+			}
+
+			// 5. Analysis Service - generate cash analysis
+			if uc.analysisService != nil {
+				if err := uc.analysisService.GenerateAnalysis(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("cash analysis generation failed")
+				}
+			}
+
+			log.Info().Str("tenant_id", tenantID.String()).Msg("treasury pipeline completed")
+		}()
+	}
+
+	return result, nil
+}
+
+// ImportBankPDF imports transactions from a PDF bank statement
+func (uc *UseCase) ImportBankPDF(ctx context.Context, tenantID, accountID uuid.UUID, pdfBytes []byte) (*CSVImportResult, error) {
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("account_id", accountID.String()).
+		Int("pdf_size", len(pdfBytes)).
+		Msg("pdf statement uploaded")
+
+	if len(pdfBytes) == 0 {
+		return nil, fmt.Errorf("empty PDF file")
+	}
+
+	// If accountID is nil, auto-create or use existing default account
+	if accountID == uuid.Nil {
+		var err error
+		accountID, err = uc.ensureDefaultBankAccount(ctx, tenantID, "")
+		if err != nil {
+			return nil, fmt.Errorf("ensuring default account: %w", err)
+		}
+	}
+
+	// Verify account exists
+	account, err := uc.bankAccounts.GetByID(ctx, tenantID, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("bank account not found: %w", err)
+	}
+
+	// Initialize parser registry
+	registry := bank_parser.NewParserRegistry()
+
+	// Parse PDF and detect bank type
+	parsedTxns, bankType, err := registry.DetectAndParse(pdfBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse PDF: %w", err)
+	}
+
+	log.Info().
+		Str("bank_type", bankType).
+		Int("transaction_count", len(parsedTxns)).
+		Msg("pdf statement parsed successfully")
+
+	// Validate that we have transactions
+	if len(parsedTxns) == 0 {
+		errMsg := "no transactions found in PDF - file may not match expected format"
+		log.Error().Str("bank_type", bankType).Msg(errMsg)
+		return nil, fmt.Errorf("%s", errMsg)
+	}
+
+	// Create ingestion job
+	job, err := uc.jobs.Create(ctx, tenantID, models.CreateIngestionJobInput{
+		JobType: "pdf_import",
+		Metadata: map[string]any{
+			"account_id": accountID.String(),
+			"bank_type":  bankType,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating ingestion job: %w", err)
+	}
+
+	_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusRunning, "")
+
+	result := &CSVImportResult{
+		JobID:     job.ID,
+		TotalRows: len(parsedTxns),
+	}
+
+	// Convert parsed transactions to BankTransaction model
+	var normalizedTxns []models.BankTransaction
+	var rawPayloads []map[string]any
+
+	for _, ptxn := range parsedTxns {
+		// Extract vendor from description
+		vendorName := bank_parser.ExtractVendorFromDescription(ptxn.Description)
+		category := bank_parser.CategorizeTransaction(ptxn.Description)
+
+		// Try to apply vendor learning rules if service is available
+		if uc.vendorLearning != nil && ptxn.Description != "" {
+			match, err := uc.vendorLearning.ApplyRules(ctx, tenantID, ptxn.Description)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to apply vendor rules")
+			} else if match != nil {
+				// Rule matched - use learned vendor and category
+				vendorName = match.VendorName
+				category = match.Category
+			}
+		}
+
+		// Resolve vendor identity
+		var vendorID *uuid.UUID
+		if uc.vendorIdentity != nil {
+			resolvedVendorID, err := uc.vendorIdentity.ResolveVendor(
+				ctx,
+				tenantID,
+				vendorName,
+				ptxn.Description,
+				category,
+			)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to resolve vendor identity")
+			} else {
+				vendorID = &resolvedVendorID
+			}
+		}
+
+		// Generate deduplication hash
+		vendorIDStr := ""
+		if vendorID != nil {
+			vendorIDStr = vendorID.String()
+		}
+		hashInput := fmt.Sprintf("%s|%s|%s|%.2f|%s|%s",
+			tenantID.String(),
+			accountID.String(),
+			ptxn.Date.Format("2006-01-02"),
+			ptxn.Amount,
+			normalizeDescription(ptxn.Description),
+			vendorIDStr,
+		)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashInput)))
+
+		// Create normalized transaction
+		txn := models.BankTransaction{
+			TenantID:     tenantID,
+			AccountID:    accountID,
+			TxnDate:      ptxn.Date,
+			Amount:       ptxn.Amount,
+			Currency:     account.Currency,
+			Description:  ptxn.Description,
+			Counterparty: vendorName,
+			Category:     category,
+			Hash:         hash,
+			VendorID:     vendorID,
+			AIVendorName: &vendorName,
+			AICategory:   &category,
+			AIConfidence: 0.85,
+			AIClassified: true,
+		}
+
+		normalizedTxns = append(normalizedTxns, txn)
+
+		// Store raw payload
+		rawPayload := map[string]any{
+			"date":        ptxn.Date.Format("2006-01-02"),
+			"description": ptxn.Description,
+			"amount":      ptxn.Amount,
+			"balance":     ptxn.Balance,
+			"debit":       ptxn.Debit,
+			"credit":      ptxn.Credit,
+			"bank_type":   bankType,
+		}
+		rawPayloads = append(rawPayloads, rawPayload)
+	}
+
+	log.Info().
+		Int("parsed_transactions", len(parsedTxns)).
+		Int("normalized_transactions", len(normalizedTxns)).
+		Msg("PDF transactions normalized")
+
+	// Store raw transactions
+	if len(rawPayloads) > 0 {
+		_, err := uc.rawTxns.BulkCreate(ctx, tenantID, "pdf_import", rawPayloads)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to store raw transactions")
+		}
+	}
+
+	// Bulk upsert normalized transactions
+	inserted, err := uc.txns.BulkUpsert(ctx, tenantID, normalizedTxns)
+	if err != nil {
+		log.Error().Err(err).Msg("PDF BulkUpsert failed")
+		_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusFailed, err.Error())
+		return nil, fmt.Errorf("bulk upsert failed: %w", err)
+	}
+
+	result.Inserted = inserted
+	result.Duplicates = len(normalizedTxns) - inserted
+
+	log.Info().
+		Int("expected", len(normalizedTxns)).
+		Int("inserted", inserted).
+		Int("duplicates", result.Duplicates).
+		Msg("PDF import completed - transactions inserted")
+
+	_ = uc.jobs.UpdateStatus(ctx, job.ID, models.JobStatusCompleted, "")
+
+	log.Info().
+		Str("tenant_id", tenantID.String()).
+		Str("job_id", job.ID.String()).
+		Int("inserted", inserted).
+		Int("duplicates", result.Duplicates).
+		Msg("pdf import completed")
+
+	// Trigger treasury pipeline in background (same as CSV import)
+	if inserted > 0 {
+		go func() {
+			bgCtx := context.Background()
+
+			// 1. AI Classification
+			if uc.classifier != nil {
+				if err := uc.classifier.ClassifyTransactions(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("AI classification failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("AI classification completed")
+				}
+			}
+
+			// 2. Cash Flow DNA - detect recurring patterns
+			if uc.cashFlowDNA != nil {
+				if err := uc.cashFlowDNA.AnalyzePatterns(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("cashflow DNA analysis failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("cashflow patterns detected")
+				}
+			}
+
+			// 3. Forecast Engine - recalculate 13-week forecast
+			if uc.forecastUC != nil {
+				if _, err := uc.forecastUC.GenerateForecast(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("forecast recalculation failed")
+				} else {
+					log.Info().Str("tenant_id", tenantID.String()).Msg("forecast recalculated")
+				}
+			}
+
+			// 4. Vendor Stats - update vendor statistics
+			if uc.vendorStats != nil {
+				if err := uc.vendorStats.UpdateStatsForTransactions(bgCtx, tenantID, normalizedTxns); err != nil {
+					log.Error().Err(err).Msg("vendor stats update failed")
+				}
+			}
+
+			// 5. Analysis Service - generate cash analysis
+			if uc.analysisService != nil {
+				if err := uc.analysisService.GenerateAnalysis(bgCtx, tenantID); err != nil {
+					log.Error().Err(err).Msg("cash analysis generation failed")
+				}
+			}
+
+			log.Info().Str("tenant_id", tenantID.String()).Msg("treasury pipeline completed")
 		}()
 	}
 
@@ -471,12 +955,29 @@ func (uc *UseCase) ListBankAccounts(ctx context.Context, tenantID uuid.UUID) ([]
 func buildColumnMap(header []string) map[string]int {
 	m := make(map[string]int, len(header))
 	for i, col := range header {
-		m[strings.TrimSpace(strings.ToLower(col))] = i
+		colLower := strings.TrimSpace(strings.ToLower(col))
+		m[colLower] = i
+
+		// Add aliases for common column name variations
+		switch colLower {
+		case "account name", "account_name", "accountname":
+			m["account_name"] = i
+		case "debit", "withdrawal", "dr", "withdrawals":
+			m["debit"] = i
+		case "credit", "deposit", "cr", "deposits":
+			m["credit"] = i
+		case "running balance", "running_balance", "balance":
+			m["balance"] = i
+		case "transaction date", "transaction_date", "txn date", "txn_date":
+			m["date"] = i
+		case "details", "particulars", "narration":
+			m["description"] = i
+		}
 	}
 	return m
 }
 
-func parseCSVRow(record []string, colMap map[string]int, tenantID, accountID uuid.UUID) (*models.BankTransaction, error) {
+func parseCSVRow(record []string, colMap map[string]int, tenantID, accountID uuid.UUID, rowNum int) (*models.BankTransaction, error) {
 	getCol := func(name string) string {
 		if idx, ok := colMap[name]; ok && idx < len(record) {
 			return strings.TrimSpace(record[idx])
@@ -485,7 +986,6 @@ func parseCSVRow(record []string, colMap map[string]int, tenantID, accountID uui
 	}
 
 	dateStr := getCol("date")
-	amountStr := getCol("amount")
 	currency := getCol("currency")
 	description := getCol("description")
 	counterparty := getCol("counterparty")
@@ -500,12 +1000,45 @@ func parseCSVRow(record []string, colMap map[string]int, tenantID, accountID uui
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("invalid date %q", dateStr)
+		return nil, fmt.Errorf("row %d: invalid date %q", rowNum, dateStr)
 	}
 
-	amount, err := strconv.ParseFloat(strings.ReplaceAll(amountStr, ",", ""), 64)
-	if err != nil {
-		return nil, fmt.Errorf("invalid amount %q", amountStr)
+	// Support both amount column and debit/credit columns
+	var amount float64
+	amountStr := getCol("amount")
+	if amountStr != "" && amountStr != "-" && amountStr != "0" {
+		// Format 1: Single amount column
+		amount, err = strconv.ParseFloat(strings.ReplaceAll(amountStr, ",", ""), 64)
+		if err != nil {
+			return nil, fmt.Errorf("row %d: invalid amount %q", rowNum, amountStr)
+		}
+	} else {
+		// Format 2: Debit/Credit columns
+		debitStr := getCol("debit")
+		creditStr := getCol("credit")
+
+		var debit, credit float64
+		if debitStr != "" && debitStr != "-" && debitStr != "0" {
+			debit, err = strconv.ParseFloat(strings.ReplaceAll(debitStr, ",", ""), 64)
+			if err != nil {
+				log.Warn().Str("debit", debitStr).Int("row", rowNum).Msg("failed to parse debit")
+				debit = 0
+			}
+		}
+		if creditStr != "" && creditStr != "-" && creditStr != "0" {
+			credit, err = strconv.ParseFloat(strings.ReplaceAll(creditStr, ",", ""), 64)
+			if err != nil {
+				log.Warn().Str("credit", creditStr).Int("row", rowNum).Msg("failed to parse credit")
+				credit = 0
+			}
+		}
+
+		if debit == 0 && credit == 0 {
+			return nil, fmt.Errorf("row %d: no amount, debit, or credit value found", rowNum)
+		}
+
+		// Credit is positive, debit is negative
+		amount = credit - debit
 	}
 
 	if currency == "" {
@@ -515,7 +1048,21 @@ func parseCSVRow(record []string, colMap map[string]int, tenantID, accountID uui
 		category = "uncategorized"
 	}
 
-	hash := computeTransactionHash(accountID.String(), dateStr, amountStr, description, counterparty)
+	hash := computeTransactionHash(accountID.String(), dateStr, fmt.Sprintf("%.2f", amount), description, counterparty)
+
+	// Mark as AI classified if we have category and counterparty
+	aiClassified := category != "" && category != "uncategorized"
+	aiConfidence := 0.0
+	if aiClassified {
+		aiConfidence = 0.85
+	}
+
+	log.Debug().
+		Int("row", rowNum).
+		Str("date", dateStr).
+		Float64("amount", amount).
+		Str("description", description).
+		Msg("bank statement row parsed")
 
 	return &models.BankTransaction{
 		TenantID:     tenantID,
@@ -527,6 +1074,10 @@ func parseCSVRow(record []string, colMap map[string]int, tenantID, accountID uui
 		Counterparty: counterparty,
 		Category:     category,
 		Hash:         hash,
+		AIClassified: aiClassified,
+		AIConfidence: aiConfidence,
+		AIVendorName: &counterparty,
+		AICategory:   &category,
 	}, nil
 }
 

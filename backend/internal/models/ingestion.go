@@ -63,7 +63,14 @@ type BankTransaction struct {
 	Hash         string     `json:"hash"`
 	RawID        *uuid.UUID `json:"raw_id,omitempty"`
 	VendorID     *uuid.UUID `json:"vendor_id,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
+
+	// AI Classification fields
+	AIVendorName *string `json:"ai_vendor_name,omitempty"`
+	AICategory   *string `json:"ai_category,omitempty"`
+	AIConfidence float64 `json:"ai_confidence"`
+	AIClassified bool    `json:"ai_classified"`
+
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type TransactionFilter struct {
@@ -132,6 +139,19 @@ type BankTransactionRepository interface {
 	List(ctx context.Context, filter TransactionFilter) ([]BankTransaction, int, error)
 	// SumBalancesByAccountUpTo returns per-account sum of transaction amounts with txn_date <= asOf (inclusive).
 	SumBalancesByAccountUpTo(ctx context.Context, tenantID uuid.UUID, asOf time.Time) (map[uuid.UUID]float64, error)
+
+	// AI Classification methods
+	GetUnclassifiedTransactions(ctx context.Context, tenantID uuid.UUID, limit int) ([]BankTransaction, error)
+	UpdateClassification(ctx context.Context, txnID uuid.UUID, vendorName, category string, confidence float64) error
+	BulkUpdateClassifications(ctx context.Context, classifications []TransactionClassification) error
+}
+
+// TransactionClassification holds AI classification data for a transaction
+type TransactionClassification struct {
+	ID         uuid.UUID
+	VendorName string
+	Category   string
+	Confidence float64
 }
 
 // CashPositionAccount is one account in a cash position response.
