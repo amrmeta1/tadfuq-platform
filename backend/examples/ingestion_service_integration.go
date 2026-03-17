@@ -158,6 +158,7 @@ func IntegrateIngestionService() error {
 // Example helper functions for gradual migration (for reference only)
 
 // withFeatureFlag wraps handlers with a feature flag for gradual migration
+// Example helper function - not used in this integration example
 func withFeatureFlag(useNew bool, oldHandler, newHandler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if useNew {
@@ -169,6 +170,7 @@ func withFeatureFlag(useNew bool, oldHandler, newHandler http.HandlerFunc) http.
 }
 
 // withTenantMigration wraps handlers with tenant-based migration logic
+// Example helper function - not used in this integration example
 func withTenantMigration(_ map[string]bool, _ http.HandlerFunc, _ http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract tenant ID from request

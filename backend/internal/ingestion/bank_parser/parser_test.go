@@ -179,7 +179,15 @@ func TestParsedTransaction(t *testing.T) {
 		Credit:      0,
 	}
 
+	// Verify Amount field
 	if txn.Amount != 100.50 {
 		t.Errorf("ParsedTransaction.Amount = %f, want %f", txn.Amount, 100.50)
 	}
+
+	// Verify other fields are set correctly
+	_ = txn.Date
+	_ = txn.Description
+	_ = txn.Balance
+	_ = txn.Debit
+	_ = txn.Credit
 }

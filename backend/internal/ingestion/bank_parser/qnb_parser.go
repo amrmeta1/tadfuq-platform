@@ -116,7 +116,7 @@ func (p *QNBParser) parseTransactions(text string) ([]ParsedTransaction, error) 
 			}
 		}
 
-		if matches != nil && len(matches) >= 3 {
+		if len(matches) >= 3 {
 			matchedLines++
 			txn, err := p.parseTransactionLine(matches)
 			if err != nil {
